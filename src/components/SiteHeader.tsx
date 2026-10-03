@@ -4,15 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/components/auth/AuthProvider";
 import { Chip, chipClassName, Tag, ThemeToggle } from "@/components/ui";
-import { useRole } from "@/hooks/useRole";
-import { DEFAULT_MACHINE_ID } from "@/lib/machines";
-import { ROLE_LABELS } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
+// Site-wide: brand, sign-in and theme. The per-machine role lives in the
+// machine header (MachineHeader), since roles are granted per machine.
 export function SiteHeader() {
   const user = useUser();
-  const { role, loading } = useRole(DEFAULT_MACHINE_ID);
   const router = useRouter();
 
   async function signOut() {
@@ -28,11 +26,6 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-muted">Rôle</span>
-          <Tag aria-live="polite" className={loading ? "opacity-40" : ""}>
-            {ROLE_LABELS[role]}
-          </Tag>
-
           {user ? (
             <>
               <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline" title={user.email ?? ""}>

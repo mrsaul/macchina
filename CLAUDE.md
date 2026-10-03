@@ -8,7 +8,8 @@ Première machine supportée : **Stronghold S7X**.
 L'utilisateur parle (voix) ou écrit ; l'assistant répond en s'appuyant sur la
 base de connaissances propre à la machine sélectionnée — un **machine pack** JSON.
 
-> État : socle UI (Next.js + design system VIBE) en place. Pas encore de logique métier.
+> État : design system VIBE, Supabase (schéma + RLS + auth lien magique), écran de
+> chat et assistant IA (Claude, streaming, réponses fondées sur le pack) en place.
 
 ---
 
@@ -117,6 +118,53 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
   membership, ou erreur). **Affichage uniquement** : les droits réels sont dans RLS.
 - Attribuer un rôle : SQL / service role (pas d'UI pour l'instant).
 
+## Packs machine
+
+- Format : `src/lib/packs/schema.ts` (Zod). Champs : identité, `version` (semver),
+  `status` (`draft`/`published`), `sections`, `intents` (catégories + mots-clés,
+  `safety` possible), `suggestions` (questions d'exemple liées à une intention),
+  `journal` (historique daté des versions du pack, affiché via le bouton Journal).
+- Nouveau pack : `packs/<id>.json` + l'enregistrer dans `src/lib/packs/index.ts`
+  (`getPack`, serveur uniquement) + `npm run db:seed`.
+- **Ne jamais inventer de contenu technique** (températures, limites, procédures) :
+  seules des questions et des catégories sans fait machine peuvent être écrites
+  sans source. Tout contenu technique vient d'une source citée et validée.
+- Intentions : `classifyIntents()` par mots-clés (accents/majuscules ignorés),
+  les intentions `safety` en premier. Provisoire, en attendant l'IA.
+
+## Écran de chat
+
+- `/` = chat de la machine par défaut (`DEFAULT_MACHINE_ID`) ; démo des composants
+  sur `/design`.
+- `src/components/chat/` : `ChatScreen` (état), `MachineHeader` (tag modèle,
+  sous-titre, rôle via `useRole`, bouton Journal), `MessageList` (VOUS / modèle,
+  tags d'intention, bandeau sécurité), `Composer` (micro, champ, Envoyer),
+  `JournalDialog` (`<dialog>` natif, Échap pour fermer).
+- Les suggestions **remplissent** le champ (pas d'envoi direct), comme la dictée.
+- Seule une tranche sérialisable du pack (`ChatPack`) part au client.
+
+## Assistant IA
+
+- Contrat neutre : `src/lib/ai/provider.ts` (`AIProvider`, `ChatTurn`, événements
+  `text`/`done`). Implémentation : `providers/anthropic.ts` (SDK officiel,
+  `claude-opus-5-5`, effort `medium`, streaming, `fallbacks: "default"` en cas de
+  refus). Choix via `AI_PROVIDER` ; modèle surchargeable via `ANTHROPIC_MODEL`.
+  **Aucun autre fichier n'importe un SDK fournisseur.**
+- Prompt système : `src/lib/ai/prompt.ts`, construit depuis le pack, déterministe
+  (pas de date) pour rester en cache. Réponses fondées **uniquement** sur les
+  sections, citées `[§id]` ; hors pack → le dire et renvoyer au manuel.
+- 1re ligne de la réponse : `INTENTIONS: id, id` (retirée du flux par
+  `intent-line.ts`) → étiquettes dans toutes les langues. Les mots-clés du pack
+  servent d'affichage immédiat et de secours ; une intention `safety` trouvée par
+  mots-clés est toujours conservée.
+- `POST /api/chat` : corps validé (Zod, 20 tours max, 4000 caractères), réponse
+  NDJSON (`src/app/api/chat/events.ts`). Limite : 10 questions / 10 min par IP
+  (anonyme), 60 par compte. **Limiteur en mémoire : par instance sur Vercel**,
+  à remplacer par un stockage partagé avant la production.
+- Client : `useChat` (historique = paires question/réponse terminées uniquement ;
+  refus → texte partiel effacé ; annulation à la sortie de page).
+- Clé : `ANTHROPIC_API_KEY` dans `.env.local` (et dans Vercel), jamais côté client.
+
 ## Clients Supabase
 
 - `src/lib/supabase/{client,server}.ts` ; `src/proxy.ts` rafraîchit la
@@ -128,25 +176,28 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 ## Décisions d'architecture (2026-10-02)
 
 1. **Packs : le dépôt Git est la source de vérité.**
-   - Les packs vivent dans `packs/`, sont validés en CI (`scripts/validate-packs.ts`)
-     et chargés par l'app au build.
+   - Les packs vivent dans `packs/`, sont chargés par l'app au build et validés
+     par `MachinePackSchema` (Zod) au premier chargement.
    - Une proposition de contributeur est stockée en base (table `contributions`) ;
      quand un mainteneur l'approuve, elle devient une modification du pack dans
      Git (PR + incrément de version), jamais une édition directe en production.
 
-2. **Voix : transcription côté serveur, derrière une abstraction.**
-   - Navigateur : bouton *push-to-talk* → `MediaRecorder` → `POST /api/transcribe`.
-   - Serveur : interface `SpeechToText` (`lib/speech/`), fournisseur
-     interchangeable. Fournisseur par défaut à choisir à l'implémentation
-     (critères : français, robustesse au bruit ventilateur/tambour, coût).
-   - Pas la Web Speech API : support inégal (Firefox), qualité variable dans le bruit.
+2. **Voix : Web Speech API dans le navigateur pour le MVP** (révisé le 2026-10-03,
+   à la demande du porteur du projet ; l'ancienne décision prévoyait une
+   transcription serveur).
+   - `useSpeechRecognition` (`src/hooks/`), en `fr-FR` : la dictée **remplit le
+     champ sans jamais envoyer** ; étiquette « DICTÉ » + cadre épais jusqu'à l'envoi.
+   - Limites connues : absente de Firefox (bouton micro désactivé) ; Chrome envoie
+     l'audio aux serveurs de Google ; qualité variable dans le bruit de la machine.
+   - Toute l'UI passe par ce hook : pour passer à une transcription serveur
+     (`SpeechToText` + `POST /api/transcribe`), ne remplacer que le hook.
    - La saisie texte reste toujours disponible.
 
 3. **Lecture anonyme autorisée.**
    - Consulter les packs et discuter avec l'assistant sans compte.
    - Compte requis pour contribuer, valider, et pour l'historique de conversation.
-   - `/api/chat` et `/api/transcribe` **limités en débit** (par IP pour les
-     anonymes, quota plus large pour les connectés).
+   - `/api/chat` (et `/api/transcribe` le cas échéant) **limités en débit** (par IP pour les
+     anonymes, quota plus large pour les connectés) — voir « Assistant IA ».
 
 ---
 

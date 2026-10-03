@@ -33,13 +33,25 @@ function subscribe(listener: () => void) {
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, readTheme, () => "system" as Theme);
 
+  const nextTheme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+
   return (
-    <div role="group" aria-label="Thème" className="flex">
-      {THEMES.map((t, i) => (
-        <Chip key={t} selected={theme === t} onClick={() => setTheme(t)} className={i > 0 ? "-ml-[1.5px]" : ""}>
-          {LABELS[t]}
-        </Chip>
-      ))}
-    </div>
+    <>
+      {/* Mobile: one chip cycling through themes, to keep the header on one line. */}
+      <Chip
+        onClick={() => setTheme(nextTheme)}
+        aria-label={`Thème : ${LABELS[theme]}. Passer à ${LABELS[nextTheme]}`}
+        className="sm:hidden"
+      >
+        {LABELS[theme]}
+      </Chip>
+      <div role="group" aria-label="Thème" className="hidden sm:flex">
+        {THEMES.map((t, i) => (
+          <Chip key={t} selected={theme === t} onClick={() => setTheme(t)} className={i > 0 ? "-ml-[1.5px]" : ""}>
+            {LABELS[t]}
+          </Chip>
+        ))}
+      </div>
+    </>
   );
 }
