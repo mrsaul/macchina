@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
+/*
+ * VIBE design tokens.
+ * Tailwind v4 has no tailwind.config: tokens live here and are exposed as
+ * utilities (bg-paper, text-ink, border-line…) through @theme inline.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #edeae0;
+  --ink: #15140f;
+  --muted: #6b675c;
+  --line: #15140f;
+  --panel: #e3dfd3;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Dark = pure inversion. Follows the system unless forced via data-theme. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --paper: #15140f;
+    --ink: #edeae0;
+    --muted: #9a968a;
+    --line: #edeae0;
+    --panel: #1f1e18;
+    color-scheme: dark;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+:root[data-theme="dark"] {
+  --paper: #15140f;
+  --ink: #edeae0;
+  --muted: #9a968a;
+  --line: #edeae0;
+  --panel: #1f1e18;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-panel: var(--panel);
+
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+  --font-sans: var(--font-mono);
+
+  /* Hard corners everywhere: no rounded-* utilities. */
+  --radius-*: initial;
+}
+
+/* 1.5px rules. */
+@utility border-rule {
+  border-width: 1.5px;
+}
+@utility border-t-rule {
+  border-top-width: 1.5px;
+}
+@utility border-b-rule {
+  border-bottom-width: 1.5px;
+}
+@utility border-l-rule {
+  border-left-width: 1.5px;
+}
+@utility border-r-rule {
+  border-right-width: 1.5px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-mono);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--line);
+    border-radius: 0;
+  }
+
+  ::selection {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  :focus-visible {
+    outline: 1.5px solid var(--ink);
+    outline-offset: 2px;
+  }
 }
