@@ -98,7 +98,28 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
   `npm run db:seed` régénère `supabase/seed.sql` (ne jamais l'éditer à la main).
 - **Toute modification de policy doit passer `npm run test:db`** (tests RLS sur
   PGlite, sans Docker) ; ajouter un test pour chaque nouvelle règle.
-- Clients : `src/lib/supabase/{client,server}.ts` ; `src/proxy.ts` rafraîchit la
+- Types générés : `npm run db:types` après chaque migration (`database.types.ts`).
+- Config Auth distante pilotée par `supabase/config.toml` (`supabase config push`).
+  **Toujours lire le diff avant de confirmer** : les valeurs par défaut locales
+  (MFA désactivé, `max_frequency` à 1 s…) affaibliraient le projet distant.
+  `config.toml` est aligné sur le distant ; URLs de retour autorisées : `localhost:3100`.
+  Ajouter l'URL de production Vercel le moment venu.
+
+## Authentification
+
+- Lien magique par e-mail (`/login`) → retour sur `/auth/callback`, qui gère les
+  deux formats de lien (`code` PKCE par défaut, `token_hash` si template personnalisé).
+  Le paramètre `next` passe par `safeNextPath()` (pas de redirection externe).
+- Pas de compte = lecture seule (« Continuer sans compte »). On n'utilise pas les
+  *anonymous sign-ins* Supabase : un visiteur non connecté est simplement `anon`.
+- `AuthProvider` (layout) partage l'utilisateur ; `useUser()` pour le lire.
+- `useRole(machineId)` → `{ role, loading }`, `reader` par défaut (anonyme, sans
+  membership, ou erreur). **Affichage uniquement** : les droits réels sont dans RLS.
+- Attribuer un rôle : SQL / service role (pas d'UI pour l'instant).
+
+## Clients Supabase
+
+- `src/lib/supabase/{client,server}.ts` ; `src/proxy.ts` rafraîchit la
   session (Next 16 : `proxy` remplace `middleware`) et ne fait rien tant que
   `.env.local` n'est pas renseigné (voir `.env.example`).
 

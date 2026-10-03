@@ -1,4 +1,4 @@
-import { ActionButton, Chip, Tag, ThemeToggle } from "@/components/ui";
+import { ActionButton, Chip, Tag } from "@/components/ui";
 
 const TOKENS = [
   { name: "paper", className: "bg-paper" },
@@ -20,15 +20,8 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 export default function Home() {
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 pb-6">
-        <div className="flex items-center gap-3">
-          <Tag>Roast Copilot</Tag>
-          <span className="text-xs uppercase tracking-wider text-muted">v0.1 — design system</span>
-        </div>
-        <ThemeToggle />
-      </header>
-
       <div className="border-b-rule border-line pb-8">
+        <p className="mb-4 text-xs uppercase tracking-wider text-muted">v0.1 — design system</p>
         <h1 className="text-2xl font-bold uppercase leading-tight sm:text-3xl">
           Comprendre et piloter
           <br />
