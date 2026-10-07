@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatStreamEvent } from "@/app/api/chat/events";
+import type { AnswerStreamEvent } from "@/app/api/copilot/events";
 import { classifyIntents } from "@/lib/packs/intents";
 import type { Intent } from "@/lib/packs/schema";
 import type { ChatMessage, ChatPack } from "./types";
@@ -69,10 +69,10 @@ export function useChat(pack: ChatPack) {
       abortRef.current = controller;
 
       try {
-        const response = await fetch("/api/chat", {
+        const response = await fetch("/api/copilot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ machineId: pack.id, turns }),
+          body: JSON.stringify({ mode: "answer", machineId: pack.id, turns }),
           signal: controller.signal,
         });
         if (!response.ok || !response.body) {
@@ -85,7 +85,7 @@ export function useChat(pack: ChatPack) {
         let pending = "";
         let finished = false;
 
-        const handle = (event: ChatStreamEvent) => {
+        const handle = (event: AnswerStreamEvent) => {
           switch (event.type) {
             case "intents": {
               const intents = mergeIntents(event.ids, keywordIntents, pack.intents);
@@ -117,9 +117,9 @@ export function useChat(pack: ChatPack) {
           pending += decoder.decode(value, { stream: true });
           const lines = pending.split("\n");
           pending = lines.pop() ?? "";
-          for (const line of lines) if (line.trim()) handle(JSON.parse(line) as ChatStreamEvent);
+          for (const line of lines) if (line.trim()) handle(JSON.parse(line) as AnswerStreamEvent);
         }
-        if (pending.trim()) handle(JSON.parse(pending) as ChatStreamEvent);
+        if (pending.trim()) handle(JSON.parse(pending) as AnswerStreamEvent);
         if (!finished) fail("La réponse a été interrompue. Réessayez.");
       } catch {
         if (!controller.signal.aborted) fail("Connexion perdue. Vérifiez le réseau et réessayez.");

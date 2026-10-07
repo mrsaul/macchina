@@ -1,16 +1,16 @@
 import "server-only";
-import type { AIProvider } from "./provider";
+import type { LLMProvider } from "./provider";
 import { AnthropicProvider } from "./providers/anthropic";
 
-// Add a provider: implement AIProvider in ./providers/ and register it here.
+// Add a provider: implement LLMProvider in ./providers/ and register it here.
 // Selected with AI_PROVIDER (default: anthropic).
-const PROVIDERS: Record<string, () => AIProvider> = {
+const PROVIDERS: Record<string, () => LLMProvider> = {
   anthropic: () => new AnthropicProvider(),
 };
 
-let instance: AIProvider | null = null;
+let instance: LLMProvider | null = null;
 
-export function getAIProvider(): AIProvider {
+export function getLLMProvider(): LLMProvider {
   if (instance) return instance;
   const name = process.env.AI_PROVIDER || "anthropic";
   const factory = PROVIDERS[name];

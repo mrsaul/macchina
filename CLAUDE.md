@@ -145,22 +145,32 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 
 ## Assistant IA
 
-- Contrat neutre : `src/lib/ai/provider.ts` (`AIProvider`, `ChatTurn`, événements
-  `text`/`done`). Implémentation : `providers/anthropic.ts` (SDK officiel,
-  `claude-opus-5-5`, effort `medium`, streaming, `fallbacks: "default"` en cas de
-  refus). Choix via `AI_PROVIDER` ; modèle surchargeable via `ANTHROPIC_MODEL`.
-  **Aucun autre fichier n'importe un SDK fournisseur.**
-- Prompt système : `src/lib/ai/prompt.ts`, construit depuis le pack, déterministe
-  (pas de date) pour rester en cache. Réponses fondées **uniquement** sur les
-  sections, citées `[§id]` ; hors pack → le dire et renvoyer au manuel.
-- 1re ligne de la réponse : `INTENTIONS: id, id` (retirée du flux par
-  `intent-line.ts`) → étiquettes dans toutes les langues. Les mots-clés du pack
-  servent d'affichage immédiat et de secours ; une intention `safety` trouvée par
-  mots-clés est toujours conservée.
-- `POST /api/chat` : corps validé (Zod, 20 tours max, 4000 caractères), réponse
-  NDJSON (`src/app/api/chat/events.ts`). Limite : 10 questions / 10 min par IP
-  (anonyme), 60 par compte. **Limiteur en mémoire : par instance sur Vercel**,
-  à remplacer par un stockage partagé avant la production.
+- Contrat neutre : `src/lib/ai/provider.ts` — `LLMProvider` avec `generate()`
+  (texte en streaming) et `generateJSON()` (objet conforme à un schéma Zod).
+  Implémentation : `providers/anthropic.ts` (SDK officiel, `claude-opus-5-5`,
+  `fallbacks: "default"` en cas de refus). Choix via `AI_PROVIDER` ; modèle
+  surchargeable via `ANTHROPIC_MODEL`. **Aucun autre fichier n'importe un SDK
+  fournisseur.** `getLLMProvider()` dans `src/lib/ai/index.ts`.
+- JSON strict : `providers/anthropic-schema.ts` convertit le schéma Zod pour les
+  *structured outputs* (le helper zod du SDK 0.131 transforme les `enum` en
+  description : ne pas l'utiliser) ; la réponse est revalidée par Zod.
+- **`POST /api/copilot`** (seule porte vers le modèle, clé uniquement serveur) :
+  - `mode: "answer"` (tous, anonymes compris) : `{ machineId, turns }` → flux
+    NDJSON (`AnswerStreamEvent`, `src/app/api/copilot/events.ts`). Réponse **en
+    français**, uniquement depuis le pack (prompt : `src/lib/ai/prompt.ts`),
+    sections citées `[§id]`, dit quand l'info manque. 1re ligne `INTENTIONS: …`
+    retirée du flux par `intent-line.ts` ; une intention `safety` trouvée par
+    mots-clés est toujours conservée.
+  - `mode: "classify"` (contributor / maintainer de la machine, sinon 401/403) :
+    `{ machineId, message }` → `{ kind: "info"|"question"|"command", entries }`,
+    1 à 4 entrées `{ text, section, safety }` pour `info`, liste vide sinon
+    (`src/lib/ai/classify.ts`). Le message est traité comme une donnée (balisé).
+    `finalizeClassification()` impose les règles : slugs propres, 4 max, et
+    `safety` forcé à `true` si les mots-clés sécurité du pack correspondent.
+  - Rôle vérifié côté serveur par `getMachineRole()` (`src/lib/auth/`).
+  - Limites : answer 10 / 10 min par IP (anonyme), 60 par compte ; classify 30
+    par compte. **Limiteur en mémoire : par instance sur Vercel**, à remplacer
+    par un stockage partagé avant la production.
 - Client : `useChat` (historique = paires question/réponse terminées uniquement ;
   refus → texte partiel effacé ; annulation à la sortie de page).
 - Clé : `ANTHROPIC_API_KEY` dans `.env.local` (et dans Vercel), jamais côté client.
