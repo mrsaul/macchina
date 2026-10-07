@@ -17,11 +17,25 @@ export function nameOf(names: Record<string, string>, id: string | null) {
   return (id && names[id]) || "Contributeur inconnu";
 }
 
-/** "Proposé par X · date / Validé par Y · date" */
+const SOURCE_KIND: Record<Contribution["source_type"], string> = {
+  contributor: "",
+  manual: "manuel",
+  document: "document",
+};
+
+/** "Source : Aude" or "Source : Manuel du moulin (manuel)". */
+export function sourceText(row: Contribution) {
+  const kind = SOURCE_KIND[row.source_type];
+  return `${row.source_label ?? "inconnue"}${kind ? ` (${kind})` : ""}`;
+}
+
+/** "Source : … / Proposé par X · date / Validé par Y · date" */
 export function Provenance({ row, names }: { row: Contribution; names: Record<string, string> }) {
   const reviewVerb = row.status === "rejected" ? "Rejeté" : "Validé";
   return (
     <p className="text-xs leading-relaxed text-muted">
+      <span className="text-ink">Source : {sourceText(row)}</span>
+      <br />
       Proposé par {nameOf(names, row.proposed_by)} · {formatDateTime(row.created_at)}
       {row.reviewed_at && (
         <>

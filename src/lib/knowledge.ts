@@ -4,7 +4,20 @@ import type { Section } from "@/lib/packs/schema";
 // contributions maintainers approved (Supabase). Shared by the Journal and
 // the prompts so both see the same base.
 
-export type ApprovedEntry = { id: string; section: string; text: string; safety: boolean };
+export type SourceType = "contributor" | "manual" | "document";
+
+export type ApprovedEntry = {
+  id: string;
+  section: string;
+  text: string;
+  safety: boolean;
+  sourceType: SourceType;
+  /** Who or what the knowledge comes from: "Saul", "Aude", "Manuel du moulin". */
+  sourceLabel: string | null;
+};
+
+/** A source as shown under an answer. "reference" = the locked pack (Git). */
+export type AnswerSource = { label: string; type: SourceType | "reference" };
 
 export type KnowledgeSection = {
   id: string;

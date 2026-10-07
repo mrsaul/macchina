@@ -40,16 +40,23 @@ const U = {
   reader: "00000000-0000-0000-0000-00000000000d",
   outsider: "00000000-0000-0000-0000-00000000000e",
   otherContrib: "00000000-0000-0000-0000-00000000000f",
+  noname: "00000000-0000-0000-0000-000000000010", // contributor who never chose a username
 };
 
 await db.exec(`
   insert into auth.users values ${Object.values(U).map((u) => `('${u}')`).join(",")};
+  -- Everyone but "outsider" and "noname" has chosen a username.
+  update public.profiles set username = case id
+    when '${U.maint}' then 'Maint' when '${U.contrib}' then 'Contrib'
+    when '${U.reader}' then 'Reader' when '${U.otherContrib}' then 'Other' end
+  where id in ('${U.maint}', '${U.contrib}', '${U.reader}', '${U.otherContrib}');
   insert into public.machines (id, brand, model, pack) values ('other-machine', 'X', 'Y', '{}');
   insert into public.memberships values
     ('${U.maint}', 'stronghold-s7x', 'maintainer'),
     ('${U.contrib}', 'stronghold-s7x', 'contributor'),
     ('${U.reader}', 'stronghold-s7x', 'reader'),
-    ('${U.otherContrib}', 'other-machine', 'contributor');
+    ('${U.otherContrib}', 'other-machine', 'contributor'),
+    ('${U.noname}', 'stronghold-s7x', 'contributor');
   insert into public.contributions (id, machine_id, text, status, proposed_by, reviewed_by, reason, reviewed_at) values
     ('10000000-0000-0000-0000-000000000001', 'stronghold-s7x', 'approved one', 'approved', '${U.contrib}', '${U.maint}', null, now()),
     ('10000000-0000-0000-0000-000000000002', 'stronghold-s7x', 'pending one', 'proposed', '${U.contrib}', null, null, null),
@@ -183,7 +190,7 @@ check("nobody deletes contributions from the client", d.denied, d.msg);
 r = await as("contrib", "select role from public.memberships");
 check("contributor sees only own membership", r.rows.length === 1 && r.rows[0].role === "contributor");
 r = await as("maint", "select user_id from public.memberships");
-check("maintainer sees their machine's members only", r.rows.length === 3);
+check("maintainer sees their machine's members only", r.rows.length === 4, r.rows.length);
 r = await as("anon", "select * from public.memberships");
 check("anon sees no memberships", r.rows.length === 0);
 
@@ -195,14 +202,27 @@ d = await denied("contrib", `update public.machines set pack='{}'`);
 check("clients cannot modify machines", d.denied, d.msg);
 
 // --- Profiles (provenance display names) ------------------------------------
-r = await as("anon", "select id, display_name from public.profiles order by id");
+r = await as("anon", "select id, display_name, username from public.profiles order by id");
 check("every account got a profile, readable by anyone", r.rows.length === Object.keys(U).length);
-check("default name does not leak anything but an id prefix", r.rows[0]?.display_name === "Contributeur 0000");
+check("default name does not leak anything but an id prefix",
+  r.rows.find((p) => p.id === U.outsider)?.display_name === "Contributeur 0000" && r.rows.find((p) => p.id === U.outsider)?.username === null,
+  JSON.stringify(r.rows.find((p) => p.id === U.outsider)));
 
-r = await as("contrib", `update public.profiles set display_name='Saul' where id='${U.contrib}' returning display_name`);
-check("users can rename themselves", r.rows[0]?.display_name === "Saul");
-d = await denied("contrib", `update public.profiles set display_name='Hacked' where id='${U.maint}'`);
+r = await as("contrib", `update public.profiles set username='Saul' where id='${U.contrib}' returning display_name`);
+check("users choose their username; display name follows", r.rows[0]?.display_name === "Saul", JSON.stringify(r.rows[0]));
+d = await denied("contrib", `update public.profiles set username='Hacked' where id='${U.maint}'`);
 check("users cannot rename someone else", d.denied, d.msg);
+d = await denied("outsider", `update public.profiles set username='saul' where id='${U.outsider}'`);
+check("usernames are unique, case-insensitively", d.denied, d.msg);
+d = await denied("outsider", `update public.profiles set username='-x-' where id='${U.outsider}'`);
+check("malformed username is refused", d.denied, d.msg);
+d = await denied("contrib", `update public.profiles set display_name='Bypass' where id='${U.contrib}'`);
+check("display name cannot be set directly", d.denied, d.msg);
+r = await as("outsider", `update public.profiles set username='Aude Martin' where id='${U.outsider}' returning display_name`);
+check("accents and spaces allowed in usernames", r.rows[0]?.display_name === "Aude Martin", JSON.stringify(r.rows[0]));
+
+d = await denied("noname", `insert into public.contributions (machine_id, text) values ('stronghold-s7x', 'x')`);
+check("no username, no contribution", d.denied, d.msg);
 d = await denied("contrib", `update public.profiles set id='${U.reader}' where id='${U.contrib}'`);
 check("profile id is not writable", d.denied, d.msg);
 d = await denied("contrib", `insert into public.profiles values ('${U.reader}', 'x', now())`);
@@ -243,8 +263,49 @@ for (const m of ["A", "B", "C"]) await as("reader", create("Daily", m));
 d = await denied("reader", create("Daily", "D"));
 check("6th machine in a day is refused", d.denied, d.msg);
 
+d = await denied("noname", create("No", "Name"));
+check("no username, no new machine", d.denied, d.msg);
+
 d = await denied("reader", `insert into public.machines (id, brand, model, pack) values ('direct', 'x', 'y', '{}')`);
 check("direct machine insert is still refused", d.denied, d.msg);
+
+// --- Contribution sources ---------------------------------------------------
+const src = (extra) =>
+  `insert into public.contributions (machine_id, text${extra ? ", " + Object.keys(extra).join(", ") : ""})
+   values ('stronghold-s7x', 'source test'${extra ? ", " + Object.values(extra).map((v) => `'${v}'`).join(", ") : ""})
+   returning id, source_type, source_label, source_ref`;
+
+r = await as("contrib", src());
+const selfRow = r.rows[0];
+check("no source given → the contributor, label from profile", selfRow?.source_type === "contributor" && selfRow?.source_label === "Saul" && selfRow?.source_ref === U.contrib, JSON.stringify(selfRow));
+
+r = await as("contrib", src({ source_label: "Aude", source_ref: U.maint }));
+const audeRow = r.rows[0];
+check("named person kept as written, cannot point at another account", audeRow?.source_label === "Aude" && audeRow?.source_ref === null, JSON.stringify(audeRow));
+
+r = await as("contrib", src({ source_type: "manual", source_label: "Manuel du moulin" }));
+check("manual source with its title", r.rows[0]?.source_type === "manual" && r.rows[0]?.source_label === "Manuel du moulin", JSON.stringify(r.rows[0]));
+
+d = await denied("contrib", src({ source_type: "document" }));
+check("document source without a label is refused", d.denied, d.msg);
+
+await as("contrib", `update public.profiles set username='Saul S' where id='${U.contrib}'`);
+r = await as("contrib", `select id, source_label from public.contributions where id in ('${selfRow.id}', '${audeRow.id}')`);
+const byId = Object.fromEntries(r.rows.map((x) => [x.id, x.source_label]));
+check("renaming yourself updates your own sources only", byId[selfRow.id] === "Saul S" && byId[audeRow.id] === "Aude", JSON.stringify(byId));
+
+r = await as("maint", `update public.contributions set source_type='manual', source_label='Manuel S7X' where id='${audeRow.id}' returning source_label, status`);
+check("maintainer can correct a source before validating", r.rows[0]?.source_label === "Manuel S7X" && r.rows[0]?.status === "proposed", JSON.stringify(r.rows[0]));
+d = await denied("contrib", `update public.contributions set source_label='Moi' where id='${audeRow.id}'`);
+check("contributor cannot rewrite a source", d.denied, d.msg);
+
+r = await as("contrib", src());
+const ownRow = r.rows[0];
+await as("maint", `update public.contributions set source_label='Aude' where id='${ownRow.id}'`);
+await as("contrib", `update public.profiles set username='Saul 2' where id='${U.contrib}'`);
+r = await as("contrib", `select source_label, source_ref from public.contributions where id='${ownRow.id}'`);
+check("a source reassigned to another person survives the proposer's rename",
+  r.rows[0]?.source_label === "Aude" && r.rows[0]?.source_ref === null, JSON.stringify(r.rows[0]));
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
 process.exit(failures ? 1 : 0);

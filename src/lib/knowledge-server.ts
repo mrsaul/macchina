@@ -15,7 +15,7 @@ export async function getKnowledge(pack: MachinePack): Promise<KnowledgeSection[
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("contributions")
-    .select("id, section, text, safety")
+    .select("id, section, text, safety, source_type, source_label")
     .eq("machine_id", pack.id)
     .eq("status", "approved")
     .order("created_at", { ascending: true });
@@ -23,6 +23,13 @@ export async function getKnowledge(pack: MachinePack): Promise<KnowledgeSection[
   if (error) console.error("[knowledge] approved contributions unavailable:", error.message);
   return buildKnowledge(
     pack.sections,
-    (data ?? []).map((row) => ({ ...row, section: row.section ?? "divers" })),
+    (data ?? []).map((row) => ({
+      id: row.id,
+      section: row.section ?? "divers",
+      text: row.text,
+      safety: row.safety,
+      sourceType: row.source_type,
+      sourceLabel: row.source_label,
+    })),
   );
 }

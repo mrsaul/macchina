@@ -1,4 +1,5 @@
 import type { ClassificationEntry } from "@/lib/ai/classify";
+import type { AnswerSource } from "@/lib/knowledge";
 import type { MachineType } from "@/lib/ontology";
 import type { Control, Intent, JournalEntry, OutlineSection, Section, Suggestion, VocabularyEntry } from "@/lib/packs/schema";
 
@@ -30,6 +31,12 @@ export type MessageStatus =
 
 export type ProposalState = "pending" | "sending" | "sent" | "cancelled";
 
+/** Where the proposed knowledge comes from. */
+export type ProposalSource =
+  | { type: "self" }
+  | { type: "contributor"; label: string } // another named person, e.g. "Aude"
+  | { type: "manual" | "document"; label: string }; // e.g. "Manuel du moulin"
+
 export type ChatMessage = {
   id: string;
   author: "user" | "assistant";
@@ -45,4 +52,6 @@ export type ChatMessage = {
   /** Shown instead of / under the text when status is "error". */
   error?: string;
   proposal?: { entries: ClassificationEntry[]; state: ProposalState; error?: string };
+  /** Sources of the journal entries the model declared using, verified server-side. */
+  sources?: AnswerSource[];
 };

@@ -1,29 +1,34 @@
 import { Tag } from "@/components/ui";
 import { ProposalCard } from "./ProposalCard";
-import type { ChatMessage } from "./types";
+import type { AnswerSource } from "@/lib/knowledge";
+import type { ChatMessage, ProposalSource } from "./types";
 
-const CITATION = /\[§([a-z0-9-]+)\]/g;
+const SOURCE_KIND: Record<AnswerSource["type"], string> = {
+  contributor: "Personne",
+  manual: "Manuel",
+  document: "Document",
+  reference: "Base de référence",
+};
 
-/** Renders [§section-id] citations as inline inverted markers. */
-function AnswerText({ text }: { text: string }) {
-  const parts = text.split(CITATION); // odd indexes are section ids
+/** "Sources : Saul · Aude · Manuel du moulin" — only what the model declared using. */
+function Sources({ sources }: { sources: AnswerSource[] }) {
   return (
-    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <span key={i} className="mx-0.5 bg-ink px-1 text-xs text-paper">
-            §{part}
-          </span>
-        ) : (
-          part
-        ),
-      )}
-    </p>
+    <div className="flex flex-wrap items-center gap-2 border-t-rule border-line pt-3">
+      <span className="text-xs uppercase tracking-wider text-muted">Sources :</span>
+      {sources.map((s) => (
+        <span
+          key={s.label}
+          title={SOURCE_KIND[s.type]}
+          className={`px-2 py-0.5 text-xs tracking-wider ${
+            s.type === "contributor" ? "border-rule border-line" : "bg-ink font-bold text-paper"
+          }`}
+        >
+          {s.type !== "contributor" && <span className="mr-1 uppercase">{SOURCE_KIND[s.type]} ·</span>}
+          {s.label}
+        </span>
+      ))}
+    </div>
   );
-}
-
-function citedSections(text: string) {
-  return [...new Set([...text.matchAll(CITATION)].map((m) => m[1]))];
 }
 
 const STATUS_NOTES: Partial<Record<ChatMessage["status"], string>> = {
@@ -41,7 +46,7 @@ export function MessageList({
   messages: ChatMessage[];
   assistantLabel: string;
   sectionTitles: Record<string, string>;
-  onConfirmProposal: (messageId: string) => void;
+  onConfirmProposal: (messageId: string, source: ProposalSource) => void;
   onCancelProposal: (messageId: string) => void;
 }) {
   return (
@@ -49,7 +54,6 @@ export function MessageList({
       {messages.map((m) => {
         const isUser = m.author === "user";
         const safety = m.intents.some((i) => i.safety);
-        const sources = isUser ? [] : citedSections(m.text);
         const waiting = m.status === "streaming" && !m.text;
 
         if (m.kind === "proposal" && m.proposal) {
@@ -59,7 +63,7 @@ export function MessageList({
                 label={assistantLabel}
                 proposal={m.proposal}
                 sectionTitles={sectionTitles}
-                onConfirm={() => onConfirmProposal(m.id)}
+                onConfirm={(source) => onConfirmProposal(m.id, source)}
                 onCancel={() => onCancelProposal(m.id)}
               />
             </li>
@@ -90,7 +94,7 @@ export function MessageList({
               ) : isUser ? (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</p>
               ) : (
-                m.text && <AnswerText text={m.text} />
+                m.text && <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</p>
               )}
 
               {m.status === "error" && (
@@ -102,16 +106,8 @@ export function MessageList({
                 <p className="text-xs uppercase tracking-wider text-muted">{STATUS_NOTES[m.status]}</p>
               )}
 
-              {sources.length > 0 && m.status !== "streaming" && (
-                <div className="flex flex-wrap items-center gap-2 border-t-rule border-line pt-3">
-                  <span className="text-xs uppercase tracking-wider text-muted">Sources</span>
-                  {sources.map((id) => (
-                    <span key={id} className="border-rule border-line px-2 py-0.5 text-xs uppercase tracking-wider">
-                      §{id}
-                      {sectionTitles[id] ? ` — ${sectionTitles[id]}` : " (section inconnue)"}
-                    </span>
-                  ))}
-                </div>
+              {!isUser && m.sources && m.sources.length > 0 && m.status !== "streaming" && (
+                <Sources sources={m.sources} />
               )}
             </div>
           </li>

@@ -1,6 +1,23 @@
+"use client";
+
+import { useState } from "react";
 import { humanizeSlug } from "@/lib/knowledge";
 import { ActionButton, Chip, Tag } from "@/components/ui";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ProposalSource } from "./types";
+
+const SOURCE_CHOICES = [
+  { id: "self", label: "Moi" },
+  { id: "contributor", label: "Une autre personne" },
+  { id: "manual", label: "Un manuel" },
+  { id: "document", label: "Un document" },
+] as const;
+type SourceChoice = (typeof SOURCE_CHOICES)[number]["id"];
+
+const SOURCE_PLACEHOLDER: Record<Exclude<SourceChoice, "self">, string> = {
+  contributor: "Nom de la personne (ex. Aude)",
+  manual: "Titre du manuel (ex. Manuel du moulin)",
+  document: "Titre du document",
+};
 
 type Proposal = NonNullable<ChatMessage["proposal"]>;
 
@@ -19,11 +36,16 @@ export function ProposalCard({
   label: string;
   proposal: Proposal;
   sectionTitles: Record<string, string>;
-  onConfirm: () => void;
+  onConfirm: (source: ProposalSource) => void;
   onCancel: () => void;
 }) {
   const { entries, state, error } = proposal;
   const count = entries.length;
+  const [choice, setChoice] = useState<SourceChoice>("self");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const needsLabel = choice !== "self";
+  const source: ProposalSource =
+    choice === "self" ? { type: "self" } : { type: choice, label: sourceLabel };
 
   return (
     <article className="border-rule border-line bg-panel" aria-live="polite">
@@ -65,8 +87,38 @@ export function ProposalCard({
         )}
 
         {(state === "pending" || state === "sending") && (
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-xs uppercase tracking-wider">D&apos;où vient cette information ?</legend>
+            <div role="radiogroup" className="flex flex-wrap gap-2">
+              {SOURCE_CHOICES.map((c) => (
+                <Chip
+                  key={c.id}
+                  role="radio"
+                  aria-checked={choice === c.id}
+                  selected={choice === c.id}
+                  onClick={() => setChoice(c.id)}
+                  disabled={state === "sending"}
+                >
+                  {c.label}
+                </Chip>
+              ))}
+            </div>
+            {needsLabel && (
+              <input
+                value={sourceLabel}
+                onChange={(e) => setSourceLabel(e.target.value)}
+                maxLength={80}
+                placeholder={SOURCE_PLACEHOLDER[choice]}
+                aria-label="Source"
+                className="w-full border-rule border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted"
+              />
+            )}
+          </fieldset>
+        )}
+
+        {(state === "pending" || state === "sending") && (
           <div className="flex flex-wrap gap-2">
-            <ActionButton onClick={onConfirm} disabled={state === "sending"}>
+            <ActionButton onClick={() => onConfirm(source)} disabled={state === "sending" || (needsLabel && !sourceLabel.trim())}>
               {state === "sending" ? "Envoi…" : "Proposer à la validation"}
             </ActionButton>
             <Chip onClick={onCancel} disabled={state === "sending"} className="px-4">

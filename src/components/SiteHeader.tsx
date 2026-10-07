@@ -31,9 +31,19 @@ export function SiteHeader() {
           </Link>
           {user ? (
             <>
-              <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline" title={user.email ?? ""}>
-                {user.email}
-              </span>
+              {user.username ? (
+                <Link
+                  href="/compte"
+                  className="hidden max-w-[16ch] truncate text-xs text-muted underline-offset-4 hover:underline sm:inline"
+                  title={user.email ?? ""}
+                >
+                  {user.username}
+                </Link>
+              ) : (
+                <Link href="/compte" className="bg-ink px-2 py-1 text-xs font-bold uppercase tracking-wider text-paper">
+                  Choisir un nom
+                </Link>
+              )}
               <Chip onClick={signOut}>Déconnexion</Chip>
             </>
           ) : (

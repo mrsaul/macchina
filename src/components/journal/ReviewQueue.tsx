@@ -22,6 +22,8 @@ function ReviewItem({
   onDone: () => void;
 }) {
   const [text, setText] = useState(row.text);
+  const [sourceType, setSourceType] = useState(row.source_type);
+  const [sourceLabel, setSourceLabel] = useState(row.source_label ?? "");
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [safetyChecked, setSafetyChecked] = useState(false);
@@ -29,9 +31,17 @@ function ReviewItem({
   const [error, setError] = useState<string | null>(null);
 
   const edited = text.trim() !== row.text;
-  const canApprove = text.trim().length > 0 && (!row.safety || safetyChecked) && !busy;
+  const sourceEdited = sourceType !== row.source_type || sourceLabel.trim() !== (row.source_label ?? "");
+  const sourceValid = sourceLabel.trim().length > 0 || sourceType === "contributor";
+  const canApprove = text.trim().length > 0 && sourceValid && (!row.safety || safetyChecked) && !busy;
 
-  async function review(change: { status: "approved" | "rejected"; text?: string; reason?: string }) {
+  async function review(change: {
+    status: "approved" | "rejected";
+    text?: string;
+    reason?: string;
+    source_type?: Contribution["source_type"];
+    source_label?: string | null;
+  }) {
     setBusy(true);
     setError(null);
     // reviewed_by / reviewed_at are set by a database trigger, not by the client.
@@ -49,7 +59,7 @@ function ReviewItem({
           {sectionTitle}
         </span>
         {row.safety && <Tag>Safety</Tag>}
-        {edited && <Tag>Modifié</Tag>}
+        {(edited || sourceEdited) && <Tag>Modifié</Tag>}
       </div>
 
       <label className="block">
@@ -62,6 +72,33 @@ function ReviewItem({
         />
       </label>
       <Provenance row={row} names={names} />
+
+      {!rejecting && (
+        <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-wider">Type de source</span>
+            <select
+              value={sourceType}
+              onChange={(e) => setSourceType(e.target.value as Contribution["source_type"])}
+              className={`${fieldClass} h-[38px] uppercase`}
+            >
+              <option value="contributor">Personne</option>
+              <option value="manual">Manuel</option>
+              <option value="document">Document</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-wider">Source affichée</span>
+            <input
+              value={sourceLabel}
+              onChange={(e) => setSourceLabel(e.target.value)}
+              maxLength={80}
+              placeholder={sourceType === "contributor" ? "Vide = la personne qui propose" : "Ex. : Manuel du moulin"}
+              className={fieldClass}
+            />
+          </label>
+        </div>
+      )}
 
       {row.safety && !rejecting && (
         <label className="flex items-start gap-2 border-rule border-line p-3 text-xs uppercase leading-relaxed tracking-wider">
@@ -111,7 +148,14 @@ function ReviewItem({
         ) : (
           <>
             <ActionButton
-              onClick={() => review({ status: "approved", ...(edited ? { text: text.trim() } : {}) })}
+              onClick={() =>
+                review({
+                  status: "approved",
+                  ...(edited ? { text: text.trim() } : {}),
+                  // An empty label on a person source = the proposer again.
+                  ...(sourceEdited ? { source_type: sourceType, source_label: sourceLabel.trim() || null } : {}),
+                })
+              }
               disabled={!canApprove}
               title={row.safety && !safetyChecked ? "Cochez la vérification sécurité pour valider" : undefined}
             >

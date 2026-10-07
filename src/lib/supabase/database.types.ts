@@ -50,6 +50,9 @@ export type Database = {
           reviewed_by: string | null
           safety: boolean
           section: string | null
+          source_label: string | null
+          source_ref: string | null
+          source_type: Database["public"]["Enums"]["contribution_source_type"]
           status: Database["public"]["Enums"]["contribution_status"]
           text: string
         }
@@ -63,6 +66,9 @@ export type Database = {
           reviewed_by?: string | null
           safety?: boolean
           section?: string | null
+          source_label?: string | null
+          source_ref?: string | null
+          source_type?: Database["public"]["Enums"]["contribution_source_type"]
           status?: Database["public"]["Enums"]["contribution_status"]
           text: string
         }
@@ -76,6 +82,9 @@ export type Database = {
           reviewed_by?: string | null
           safety?: boolean
           section?: string | null
+          source_label?: string | null
+          source_ref?: string | null
+          source_type?: Database["public"]["Enums"]["contribution_source_type"]
           status?: Database["public"]["Enums"]["contribution_status"]
           text?: string
         }
@@ -153,16 +162,19 @@ export type Database = {
           created_at: string
           display_name: string
           id: string
+          username: string | null
         }
         Insert: {
           created_at?: string
           display_name: string
           id: string
+          username?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string
           id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -183,6 +195,7 @@ export type Database = {
       }
     }
     Enums: {
+      contribution_source_type: "contributor" | "manual" | "document"
       contribution_status: "proposed" | "approved" | "rejected"
       member_role: "reader" | "contributor" | "maintainer"
     }
@@ -315,6 +328,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      contribution_source_type: ["contributor", "manual", "document"],
       contribution_status: ["proposed", "approved", "rejected"],
       member_role: ["reader", "contributor", "maintainer"],
     },

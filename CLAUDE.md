@@ -165,6 +165,28 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 - **Temps réel** : `contributions` est dans la publication `supabase_realtime` ;
   `useContributions()` recharge sur chaque événement (RLS appliquée par abonné).
 
+## Provenance et noms d'utilisateur
+
+- **Nom d'utilisateur obligatoire** (`profiles.username`, unique sans casse, 2–30
+  caractères) avant de contribuer ou de créer une machine — imposé par des triggers
+  (`require_username`), quel que soit le chemin. `display_name` suit le username.
+  Première connexion sans username → `/compte`. En-tête : « Choisir un nom ».
+- **Source structurée** sur `contributions` : `source_type` (`contributor` |
+  `manual` | `document`), `source_label` (affiché : « Saul », « Aude »,
+  « Manuel du moulin »), `source_ref` (id du compte, ou du document, ou null).
+  Trigger `contributions_fill_source` : sans libellé → le proposant (son nom) ;
+  autre personne → libellé tel quel, pas de lien vers un compte ; manuel/document
+  → libellé obligatoire. Renommer son compte met à jour ses propres sources.
+- À la proposition : « Moi / Une autre personne / Un manuel / Un document ».
+  Le mainteneur peut corriger la source avant de valider. Journal : « Source : … ».
+- **Réponses sourcées** : chaque entrée du journal reçoit un id court `[eN]` +
+  sa source dans le prompt ; le modèle termine par `SOURCES: e1, e4` (retiré du
+  flux par `createAnswerParser`). Le serveur ne garde que les ids existants, n'en
+  envoie aucun si la réponse est refusée ou tronquée, et transmet les libellés
+  distincts (événement `sources`). L'UI affiche « Sources : » sous la réponse
+  (personne = contour, manuel/document = bloc noir). **Jamais de source non
+  déclarée par le modèle.**
+
 ## Machines et ontologie commune
 
 - **Ontologie** (`src/lib/ontology.ts`) : types `roaster | grinder | espresso | other`

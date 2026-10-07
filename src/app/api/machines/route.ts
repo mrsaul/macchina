@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
   const userId = auth?.claims.sub;
   if (!userId) return jsonError(401, "Connectez-vous pour ajouter une machine.");
 
+  const { data: profile } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+  if (!profile?.username) return jsonError(403, "Choisis d'abord ton nom d'utilisateur (page Compte).");
+
   // The database also caps creations per day; this stops paying for a model
   // call that would then be refused.
   const limit = rateLimit(`machines:${userId}`, 5, 24 * 60 * 60 * 1000);
@@ -74,6 +77,7 @@ export async function POST(request: NextRequest) {
   });
   if (error || !id) {
     if (error?.message.includes("too many machines")) return jsonError(429, "Limite atteinte : 5 machines par jour.");
+    if (error?.message.includes("username")) return jsonError(403, "Choisis d'abord ton nom d'utilisateur (page Compte).");
     console.error("[machines] create_machine failed:", error?.message);
     return jsonError(500, "La machine n'a pas pu être créée. Réessayez.");
   }

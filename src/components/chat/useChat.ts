@@ -5,7 +5,7 @@ import type { AnswerStreamEvent, ClassifyResponse } from "@/app/api/copilot/even
 import { classifyIntents } from "@/lib/packs/intents";
 import type { Intent } from "@/lib/packs/schema";
 import { createClient } from "@/lib/supabase/client";
-import type { ChatMessage, ChatPack } from "./types";
+import type { ChatMessage, ChatPack, ProposalSource } from "./types";
 
 const MAX_TURNS = 20; // must match the API limit
 
@@ -101,6 +101,9 @@ export function useChat(pack: ChatPack, { canContribute }: { canContribute: bool
           case "text":
             patch([ids.answer], (m) => ({ text: m.text + event.text }));
             break;
+          case "sources":
+            patch([ids.answer], () => ({ sources: event.sources }));
+            break;
           case "done":
             finished = true;
             if (event.stopReason === "refusal") {
@@ -195,7 +198,7 @@ export function useChat(pack: ChatPack, { canContribute }: { canContribute: bool
 
   /** Saves the proposal's entries as "proposed" contributions (RLS checks the role). */
   const confirmProposal = useCallback(
-    async (messageId: string) => {
+    async (messageId: string, source: ProposalSource) => {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message?.proposal || message.proposal.state !== "pending") return;
 
@@ -208,6 +211,10 @@ export function useChat(pack: ChatPack, { canContribute }: { canContribute: bool
             text: e.text,
             section: e.section,
             safety: e.safety,
+            // "self" leaves the label empty: the database fills in the
+            // contributor's username.
+            source_type: source.type === "self" ? "contributor" : source.type,
+            source_label: source.type === "self" ? null : source.label.trim(),
           })),
         )
         .select("id");
@@ -215,7 +222,13 @@ export function useChat(pack: ChatPack, { canContribute }: { canContribute: bool
       patch([messageId], (m) => ({
         proposal:
           error || !data?.length
-            ? { ...m.proposal!, state: "pending", error: "L'envoi a échoué. Vérifiez que vous êtes connecté, puis réessayez." }
+            ? {
+                ...m.proposal!,
+                state: "pending",
+                error: error?.message.includes("username")
+                  ? "Choisis d'abord ton nom d'utilisateur (page Compte), puis réessaie."
+                  : "L'envoi a échoué. Vérifiez que vous êtes connecté, puis réessayez.",
+              }
             : { ...m.proposal!, state: "sent" },
       }));
     },

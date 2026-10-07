@@ -22,15 +22,26 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // Signed in: every account must choose a username before contributing.
+  const done = async () => {
+    const { data: claims } = await supabase.auth.getClaims();
+    const userId = claims?.claims.sub;
+    if (userId) {
+      const { data: profile } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+      if (!profile?.username) return NextResponse.redirect(new URL(`/compte?next=${encodeURIComponent(next)}`, origin));
+    }
+    return NextResponse.redirect(new URL(next, origin));
+  };
+
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return done();
     return fail(error.code === "pkce_code_verifier_not_found" ? "browser" : "link");
   }
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return done();
     return fail(error.code === "otp_expired" ? "expired" : "link");
   }
 

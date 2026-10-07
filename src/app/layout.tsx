@@ -24,7 +24,9 @@ async function getInitialUser(): Promise<AuthUser | null> {
   if (!isSupabaseConfigured) return null;
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  return data.user ? { id: data.user.id, email: data.user.email ?? null } : null;
+  if (!data.user) return null;
+  const { data: profile } = await supabase.from("profiles").select("username").eq("id", data.user.id).maybeSingle();
+  return { id: data.user.id, email: data.user.email ?? null, username: profile?.username ?? null };
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

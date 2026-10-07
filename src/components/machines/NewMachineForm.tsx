@@ -55,6 +55,18 @@ export function NewMachineForm() {
     );
   }
 
+  if (!user.username) {
+    return (
+      <p className="mt-8 border-rule border-line p-4 text-sm">
+        Avant d&apos;ajouter une machine,{" "}
+        <Link href="/compte?next=/machines/new" className="underline underline-offset-4">
+          choisis ton nom d&apos;utilisateur
+        </Link>
+        .
+      </p>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="mt-8 space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">

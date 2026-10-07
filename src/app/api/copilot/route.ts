@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { AIBusyError, AIUnavailableError, getLLMProvider } from "@/lib/ai";
 import { buildClassifyPrompt, ClassificationSchema, finalizeClassification } from "@/lib/ai/classify";
-import { createIntentLineParser } from "@/lib/ai/intent-line";
+import { createAnswerParser } from "@/lib/ai/intent-line";
 import { buildNarrateMessage, buildNarratePrompt, NarrationSchema, type Narration } from "@/lib/ai/narrate";
 import { buildAnswerPrompt } from "@/lib/ai/prompt";
 import { getMachineRole } from "@/lib/auth/machine-role";
 import { getKnowledge } from "@/lib/knowledge-server";
 import { checkLimits, hasValues, ReadingSchema, type LimitAlert, type Reading } from "@/lib/narration";
 import { getPack } from "@/lib/packs";
-import type { KnowledgeSection } from "@/lib/knowledge";
+import type { AnswerSource, KnowledgeSection } from "@/lib/knowledge";
 import type { MachinePack } from "@/lib/packs/schema";
 import { rateLimit } from "@/lib/rate-limit";
 import type { AnswerStreamEvent, ClassifyResponse } from "./events";
@@ -196,7 +196,8 @@ function answer(
   signal: AbortSignal,
 ) {
   const provider = getLLMProvider();
-  const parser = createIntentLineParser(pack.intents.map((i) => i.id));
+  const parser = createAnswerParser(pack.intents.map((i) => i.id));
+  const { system, sources } = buildAnswerPrompt(pack, knowledge);
   const encoder = new TextEncoder();
 
   // NDJSON stream: one AnswerStreamEvent per line. Errors after the stream
@@ -210,10 +211,20 @@ function answer(
       };
 
       try {
-        for await (const event of provider.generate({ system: buildAnswerPrompt(pack, knowledge), messages: turns, signal })) {
+        for await (const event of provider.generate({ system, messages: turns, signal })) {
           if (event.type === "text") forward(parser.push(event.text));
           else {
             forward(parser.flush());
+            // Only entries the model declared, that exist, for an answer it
+            // actually gave: a refused or cut-off answer shows no source.
+            if (event.stopReason === "end") {
+              const labels = new Map<string, AnswerSource>();
+              for (const id of parser.sourceIds() ?? []) {
+                const source = sources.get(id);
+                if (source && !labels.has(source.label)) labels.set(source.label, source);
+              }
+              if (labels.size) send({ type: "sources", sources: [...labels.values()] });
+            }
             send({ type: "done", stopReason: event.stopReason });
           }
         }

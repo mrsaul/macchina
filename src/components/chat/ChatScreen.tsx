@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@/components/auth/AuthProvider";
 import { Tag } from "@/components/ui";
@@ -16,7 +17,9 @@ import { useChat } from "./useChat";
 export function ChatScreen({ pack }: { pack: ChatPack }) {
   const user = useUser();
   const { role, loading: roleLoading } = useRole(pack.id);
-  const canContribute = role === "contributor" || role === "maintainer";
+  const hasContributorRole = role === "contributor" || role === "maintainer";
+  // Contributions need a username (it is the source shown to everyone).
+  const canContribute = hasContributorRole && Boolean(user?.username);
   const { messages, busy, send, confirmProposal, cancelProposal } = useChat(pack, { canContribute });
   const contributions = useContributions(pack.id);
   const [text, setText] = useState("");
@@ -35,7 +38,14 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
         pack.sections,
         contributions.rows
           .filter((r) => r.status === "approved")
-          .map((r) => ({ id: r.id, section: r.section ?? "divers", text: r.text, safety: r.safety })),
+          .map((r) => ({
+            id: r.id,
+            section: r.section ?? "divers",
+            text: r.text,
+            safety: r.safety,
+            sourceType: r.source_type,
+            sourceLabel: r.source_label,
+          })),
       ),
     [pack.sections, contributions.rows],
   );
@@ -84,6 +94,18 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
         onOpenJournal={openJournal}
       />
 
+      {hasContributorRole && user && !user.username && (
+        <p className="mx-auto mt-4 w-full max-w-3xl px-4 text-xs uppercase leading-relaxed tracking-wider sm:px-8">
+          <span className="border-l-rule border-line pl-3">
+            Pour proposer des contributions,{" "}
+            <Link href={`/compte?next=/m/${pack.id}`} className="font-bold underline underline-offset-4">
+              choisis ton nom d&apos;utilisateur
+            </Link>
+            .
+          </span>
+        </p>
+      )}
+
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-8">
         {messages.length === 0 ? (
           <section aria-labelledby="empty-title" className="space-y-6">
@@ -126,7 +148,7 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
             messages={messages}
             assistantLabel={pack.model}
             sectionTitles={sectionTitles}
-            onConfirmProposal={(id) => void confirmProposal(id)}
+            onConfirmProposal={(id, source) => void confirmProposal(id, source)}
             onCancelProposal={cancelProposal}
           />
         )}
