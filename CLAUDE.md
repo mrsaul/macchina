@@ -183,6 +183,18 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 
 ---
 
+## Déploiement
+
+- **Production : https://maccina.vercel.app** — projet Vercel `maccina`, équipe
+  « filteer's projects » (`filteers-projects`). Lien local dans `.vercel/` (ignoré par Git).
+- Déploiement manuel tant que GitHub n'est pas relié au projet : `vercel deploy --prod`.
+- Variables Vercel : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+  (production, preview, development). `ANTHROPIC_API_KEY` à ajouter (sensible).
+- Supabase Auth : `site_url` = production ; URLs de retour = production + `localhost:3100`.
+  Pour un nouveau domaine : `config.toml` puis `supabase config push` (lire le diff).
+
+---
+
 ## Décisions d'architecture (2026-10-02)
 
 1. **Packs : le dépôt Git est la source de vérité.**
