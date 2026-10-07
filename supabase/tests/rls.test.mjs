@@ -3,10 +3,13 @@
 // as each role. Run with `npm run test:db`.
 
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const migration = readFileSync(`${ROOT}/migrations/20261003000000_init_schema.sql`, "utf8");
+const migrations = readdirSync(`${ROOT}/migrations`)
+  .filter((f) => f.endsWith(".sql"))
+  .sort()
+  .map((f) => readFileSync(`${ROOT}/migrations/${f}`, "utf8"));
 const seed = readFileSync(`${ROOT}/seed.sql`, "utf8");
 
 const db = new PGlite();
@@ -27,7 +30,7 @@ await db.exec(`
   alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 `);
 
-await db.exec(migration);
+for (const migration of migrations) await db.exec(migration);
 await db.exec(seed);
 await db.exec(seed); // idempotent
 
@@ -185,6 +188,22 @@ d = await denied("contrib", `update public.memberships set role='maintainer' whe
 check("cannot promote yourself", d.denied, d.msg);
 d = await denied("contrib", `update public.machines set pack='{}'`);
 check("clients cannot modify machines", d.denied, d.msg);
+
+// --- Profiles (provenance display names) ------------------------------------
+r = await as("anon", "select id, display_name from public.profiles order by id");
+check("every account got a profile, readable by anyone", r.rows.length === Object.keys(U).length);
+check("default name does not leak anything but an id prefix", r.rows[0]?.display_name === "Contributeur 0000");
+
+r = await as("contrib", `update public.profiles set display_name='Saul' where id='${U.contrib}' returning display_name`);
+check("users can rename themselves", r.rows[0]?.display_name === "Saul");
+d = await denied("contrib", `update public.profiles set display_name='Hacked' where id='${U.maint}'`);
+check("users cannot rename someone else", d.denied, d.msg);
+d = await denied("contrib", `update public.profiles set id='${U.reader}' where id='${U.contrib}'`);
+check("profile id is not writable", d.denied, d.msg);
+d = await denied("contrib", `insert into public.profiles values ('${U.reader}', 'x', now())`);
+check("clients cannot create profiles", d.denied, d.msg);
+d = await denied("anon", `update public.profiles set display_name='x'`);
+check("anon cannot rename anyone", d.denied, d.msg);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
 process.exit(failures ? 1 : 0);

@@ -1,15 +1,25 @@
 "use client";
 
 import { Chip, Tag } from "@/components/ui";
-import { useRole } from "@/hooks/useRole";
-import { ROLE_LABELS } from "@/lib/roles";
+import { ROLE_LABELS, type MemberRole } from "@/lib/roles";
 import type { ChatPack } from "./types";
 
 const STATUS_LABELS: Record<ChatPack["status"], string> = { draft: "Brouillon", published: "Publié" };
 
-export function MachineHeader({ pack, onOpenJournal }: { pack: ChatPack; onOpenJournal: () => void }) {
-  const { role, loading } = useRole(pack.id);
-
+export function MachineHeader({
+  pack,
+  role,
+  roleLoading,
+  pendingReview,
+  onOpenJournal,
+}: {
+  pack: ChatPack;
+  role: MemberRole;
+  roleLoading: boolean;
+  /** Proposals waiting for this maintainer; 0 for everyone else. */
+  pendingReview: number;
+  onOpenJournal: () => void;
+}) {
   return (
     <div className="border-b-rule border-line">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-8">
@@ -22,11 +32,16 @@ export function MachineHeader({ pack, onOpenJournal }: { pack: ChatPack; onOpenJ
 
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wider text-muted">Rôle</span>
-          <Tag aria-live="polite" className={loading ? "opacity-40" : ""}>
+          <Tag aria-live="polite" className={roleLoading ? "opacity-40" : ""}>
             {ROLE_LABELS[role]}
           </Tag>
-          <Chip onClick={onOpenJournal} aria-haspopup="dialog">
+          <Chip
+            onClick={onOpenJournal}
+            aria-haspopup="dialog"
+            aria-label={pendingReview ? `Journal, ${pendingReview} proposition(s) à valider` : "Journal"}
+          >
             Journal
+            {pendingReview > 0 && <span className="ml-2 bg-ink px-1.5 font-bold text-paper">{pendingReview}</span>}
           </Chip>
         </div>
       </div>

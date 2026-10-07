@@ -5,7 +5,9 @@ import { buildClassifyPrompt, ClassificationSchema, finalizeClassification } fro
 import { createIntentLineParser } from "@/lib/ai/intent-line";
 import { buildAnswerPrompt } from "@/lib/ai/prompt";
 import { getMachineRole } from "@/lib/auth/machine-role";
+import { getKnowledge } from "@/lib/knowledge-server";
 import { getPack } from "@/lib/packs";
+import type { KnowledgeSection } from "@/lib/knowledge";
 import type { MachinePack } from "@/lib/packs/schema";
 import { rateLimit } from "@/lib/rate-limit";
 import type { AnswerStreamEvent, ClassifyResponse } from "./events";
@@ -94,13 +96,13 @@ export async function POST(request: NextRequest) {
     WINDOW_MS,
   );
   if (!limit.ok) return tooMany(limit.retryAfterSeconds);
-  return answer(body.turns, pack, request.signal);
+  return answer(body.turns, pack, await getKnowledge(pack), request.signal);
 }
 
 async function classify(message: string, pack: MachinePack, signal: AbortSignal) {
   try {
     const result = await getLLMProvider().generateJSON({
-      system: buildClassifyPrompt(pack),
+      system: buildClassifyPrompt(pack, await getKnowledge(pack)),
       // The message is data: fenced, and a closing tag inside it is neutralized.
       messages: [{ role: "user", content: `<message>\n${message.replaceAll("</message>", "</ message>")}\n</message>` }],
       schema: ClassificationSchema,
@@ -121,7 +123,12 @@ async function classify(message: string, pack: MachinePack, signal: AbortSignal)
   }
 }
 
-function answer(turns: { role: "user" | "assistant"; content: string }[], pack: MachinePack, signal: AbortSignal) {
+function answer(
+  turns: { role: "user" | "assistant"; content: string }[],
+  pack: MachinePack,
+  knowledge: KnowledgeSection[],
+  signal: AbortSignal,
+) {
   const provider = getLLMProvider();
   const parser = createIntentLineParser(pack.intents.map((i) => i.id));
   const encoder = new TextEncoder();
@@ -137,7 +144,7 @@ function answer(turns: { role: "user" | "assistant"; content: string }[], pack: 
       };
 
       try {
-        for await (const event of provider.generate({ system: buildAnswerPrompt(pack), messages: turns, signal })) {
+        for await (const event of provider.generate({ system: buildAnswerPrompt(pack, knowledge), messages: turns, signal })) {
           if (event.type === "text") forward(parser.push(event.text));
           else {
             forward(parser.flush());

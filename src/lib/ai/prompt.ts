@@ -1,24 +1,29 @@
+import type { KnowledgeSection } from "@/lib/knowledge";
 import type { MachinePack } from "@/lib/packs/schema";
 
 export const INTENT_LINE_PREFIX = "INTENTIONS:";
 export const NO_INTENT = "aucune";
 
+function renderSection(s: KnowledgeSection) {
+  const parts = [
+    s.locked?.body,
+    ...s.approved.map((e) => `- ${e.text}${e.safety ? " [sécurité]" : ""}`),
+  ].filter(Boolean);
+  return `<section id="${s.id}" titre="${s.title}"${s.safety ? ' safety="true"' : ""}>\n${parts.join("\n")}\n</section>`;
+}
+
 /**
- * System prompt for one machine. Deterministic for a given pack version (no
+ * System prompt for one machine. Deterministic for a given knowledge base (no
  * dates, no per-request data) so it stays a stable, cacheable prefix.
  */
-export function buildAnswerPrompt(pack: MachinePack): string {
+export function buildAnswerPrompt(pack: MachinePack, knowledge: KnowledgeSection[]): string {
   const intents = pack.intents.map((i) => `- ${i.id} : ${i.label}${i.safety ? " (sécurité)" : ""}`).join("\n");
   const sections =
-    pack.sections.length === 0
-      ? "(aucune section validée pour l'instant)"
-      : pack.sections
-          .map((s) => `<section id="${s.id}" titre="${s.title}"${s.safety ? ' safety="true"' : ""}>\n${s.body}\n</section>`)
-          .join("\n\n");
+    knowledge.length === 0 ? "(aucune section validée pour l'instant)" : knowledge.map(renderSection).join("\n\n");
 
   return `Tu es Roast Copilot, l'assistant de la torréfacteuse ${pack.brand} ${pack.model}. Tu aides des torréfacteurs à comprendre et piloter cette machine.
 
-Ta seule source de connaissance sur la machine est le pack ci-dessous (version ${pack.version}, statut ${pack.status}). Le pack est rédigé et validé par des mainteneurs ; tout ce qui n'y figure pas est inconnu pour toi, même si tu crois le savoir.
+Ta seule source de connaissance sur la machine est le pack ci-dessous (version ${pack.version}, statut ${pack.status}) : la base de référence et les contributions validées par des mainteneurs. Tout ce qui n'y figure pas est inconnu pour toi, même si tu crois le savoir.
 
 <pack>
 ${sections}

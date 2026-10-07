@@ -1,19 +1,55 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useUser } from "@/components/auth/AuthProvider";
 import { Tag } from "@/components/ui";
+import { useContributions } from "@/hooks/useContributions";
+import { useRole } from "@/hooks/useRole";
+import { buildKnowledge } from "@/lib/knowledge";
 import { Composer } from "./Composer";
-import { JournalDialog } from "./JournalDialog";
+import { JournalDialog, type JournalTab } from "./JournalDialog";
 import { MachineHeader } from "./MachineHeader";
 import { MessageList } from "./MessageList";
 import type { ChatPack } from "./types";
 import { useChat } from "./useChat";
 
 export function ChatScreen({ pack }: { pack: ChatPack }) {
-  const { messages, busy, send } = useChat(pack);
+  const user = useUser();
+  const { role, loading: roleLoading } = useRole(pack.id);
+  const canContribute = role === "contributor" || role === "maintainer";
+  const { messages, busy, send, confirmProposal, cancelProposal } = useChat(pack, { canContribute });
+  const contributions = useContributions(pack.id);
   const [text, setText] = useState("");
   const [dictated, setDictated] = useState(false);
-  const [journalOpen, setJournalOpen] = useState(false);
+  const [journal, setJournal] = useState<{ open: boolean; tab: JournalTab; key: number }>({
+    open: false,
+    tab: "base",
+    key: 0,
+  });
+
+  // One knowledge base for the Journal and for citation titles: locked pack
+  // sections + approved contributions.
+  const knowledge = useMemo(
+    () =>
+      buildKnowledge(
+        pack.sections,
+        contributions.rows
+          .filter((r) => r.status === "approved")
+          .map((r) => ({ id: r.id, section: r.section ?? "divers", text: r.text, safety: r.safety })),
+      ),
+    [pack.sections, contributions.rows],
+  );
+  const sectionTitles = useMemo(() => Object.fromEntries(knowledge.map((s) => [s.id, s.title])), [knowledge]);
+  const pendingReview =
+    role === "maintainer" ? contributions.rows.filter((r) => r.status === "proposed") : [];
+  const mine = user
+    ? contributions.rows.filter((r) => r.proposed_by === user.id).toReversed()
+    : [];
+
+  function openJournal() {
+    // Remount on each open so the panel starts on the most useful tab.
+    setJournal((j) => ({ open: true, tab: pendingReview.length ? "review" : "base", key: j.key + 1 }));
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -40,7 +76,13 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <MachineHeader pack={pack} onOpenJournal={() => setJournalOpen(true)} />
+      <MachineHeader
+        pack={pack}
+        role={role}
+        roleLoading={roleLoading}
+        pendingReview={pendingReview.length}
+        onOpenJournal={openJournal}
+      />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-8">
         {messages.length === 0 ? (
@@ -50,7 +92,9 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
                 Une question sur la {pack.model} ?
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Écrivez ou dictez votre question. Les réponses s&apos;appuient uniquement sur le pack de la machine.
+                Écrivez ou dictez votre question. Les réponses s&apos;appuient uniquement sur la base de la machine.
+                {canContribute &&
+                  " Vous pouvez aussi décrire ce que vous savez de la machine : ce sera proposé à la validation."}
               </p>
             </div>
 
@@ -78,7 +122,13 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
             )}
           </section>
         ) : (
-          <MessageList messages={messages} assistantLabel={pack.model} sectionTitles={pack.sectionTitles} />
+          <MessageList
+            messages={messages}
+            assistantLabel={pack.model}
+            sectionTitles={sectionTitles}
+            onConfirmProposal={(id) => void confirmProposal(id)}
+            onCancelProposal={cancelProposal}
+          />
         )}
         <div ref={endRef} />
       </main>
@@ -93,7 +143,19 @@ export function ChatScreen({ pack }: { pack: ChatPack }) {
         textareaRef={textareaRef}
       />
 
-      <JournalDialog pack={pack} open={journalOpen} onClose={() => setJournalOpen(false)} />
+      <JournalDialog
+        key={journal.key}
+        pack={pack}
+        open={journal.open}
+        onClose={() => setJournal((j) => ({ ...j, open: false }))}
+        initialTab={journal.tab}
+        role={role}
+        knowledge={knowledge}
+        sectionTitles={sectionTitles}
+        contributions={contributions}
+        pendingReview={pendingReview}
+        mine={mine}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { Tag } from "@/components/ui";
+import { ProposalCard } from "./ProposalCard";
 import type { ChatMessage } from "./types";
 
 const CITATION = /\[§([a-z0-9-]+)\]/g;
@@ -34,10 +35,14 @@ export function MessageList({
   messages,
   assistantLabel,
   sectionTitles,
+  onConfirmProposal,
+  onCancelProposal,
 }: {
   messages: ChatMessage[];
   assistantLabel: string;
   sectionTitles: Record<string, string>;
+  onConfirmProposal: (messageId: string) => void;
+  onCancelProposal: (messageId: string) => void;
 }) {
   return (
     <ol className="space-y-6">
@@ -46,6 +51,20 @@ export function MessageList({
         const safety = m.intents.some((i) => i.safety);
         const sources = isUser ? [] : citedSections(m.text);
         const waiting = m.status === "streaming" && !m.text;
+
+        if (m.kind === "proposal" && m.proposal) {
+          return (
+            <li key={m.id}>
+              <ProposalCard
+                label={assistantLabel}
+                proposal={m.proposal}
+                sectionTitles={sectionTitles}
+                onConfirm={() => onConfirmProposal(m.id)}
+                onCancel={() => onCancelProposal(m.id)}
+              />
+            </li>
+          );
+        }
 
         return (
           <li key={m.id} className={isUser ? "border-l-rule border-line pl-4" : "border-rule border-line bg-panel"}>
@@ -66,7 +85,7 @@ export function MessageList({
 
               {waiting ? (
                 <p className="text-xs uppercase tracking-wider text-muted">
-                  <span className="animate-pulse">■</span> Recherche dans le pack…
+                  <span className="animate-pulse">■</span> Analyse en cours…
                 </p>
               ) : isUser ? (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</p>

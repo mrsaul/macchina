@@ -8,14 +8,14 @@ export default function Home() {
   const pack = getPack(DEFAULT_MACHINE_ID);
   if (!pack) notFound();
 
-  // Only what the client needs: section bodies stay on the server.
+  // Everything here is public knowledge; the pack's raw file stays server-side.
   const chatPack: ChatPack = {
     id: pack.id,
     brand: pack.brand,
     model: pack.model,
     version: pack.version,
     status: pack.status,
-    sectionTitles: Object.fromEntries(pack.sections.map((s) => [s.id, s.title])),
+    sections: pack.sections,
     intents: pack.intents,
     suggestions: pack.suggestions,
     journal: pack.journal,

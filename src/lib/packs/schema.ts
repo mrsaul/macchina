@@ -59,3 +59,4 @@ export type MachinePack = z.infer<typeof MachinePackSchema>;
 export type Intent = z.infer<typeof IntentSchema>;
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 export type JournalEntry = z.infer<typeof JournalEntrySchema>;
+export type Section = z.infer<typeof SectionSchema>;

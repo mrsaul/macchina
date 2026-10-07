@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { KnowledgeSection } from "@/lib/knowledge";
 import { classifyIntents, normalize } from "@/lib/packs/intents";
 import type { MachinePack } from "@/lib/packs/schema";
 
@@ -24,11 +25,11 @@ export type RawClassification = z.infer<typeof ClassificationSchema>;
 export type ClassificationEntry = RawClassification["entries"][number];
 export type Classification = { kind: RawClassification["kind"]; entries: ClassificationEntry[] };
 
-export function buildClassifyPrompt(pack: MachinePack): string {
+export function buildClassifyPrompt(pack: MachinePack, knowledge: KnowledgeSection[]): string {
   const sections =
-    pack.sections.length === 0
+    knowledge.length === 0
       ? "(aucune section pour l'instant : propose de nouveaux identifiants)"
-      : pack.sections.map((s) => `- ${s.id} : ${s.title}`).join("\n");
+      : knowledge.map((s) => `- ${s.id} : ${s.title}`).join("\n");
 
   return `Tu tries les messages des contributeurs de la base de connaissances de la torréfacteuse ${pack.brand} ${pack.model}.
 

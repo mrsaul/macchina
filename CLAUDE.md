@@ -143,6 +143,28 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 - Les suggestions **remplissent** le champ (pas d'envoi direct), comme la dictée.
 - Seule une tranche sérialisable du pack (`ChatPack`) part au client.
 
+## Flux de contribution
+
+- **Base de connaissances** = sections du pack (Git, « base verrouillée », non
+  éditables dans l'app) + contributions `approved` (Supabase). Une seule fonction
+  `buildKnowledge()` (`src/lib/knowledge.ts`) sert au Journal et aux prompts
+  (`getKnowledge()` côté serveur) : une contribution validée sert aussitôt aux réponses.
+- **Contributeur / mainteneur** : chaque message passe d'abord par `classify`.
+  `info` → carte « Proposition » (`ProposalCard`) à confirmer ; à la confirmation,
+  insertion directe en `proposed` depuis le client (RLS vérifie le rôle).
+  `question` → réponse normale. `command` → message « pas encore pris en charge ».
+- **Journal** (`JournalDialog`, onglets selon le rôle) : Base (groupée par section,
+  provenance proposé par / validé par), À valider (mainteneurs : éditer le texte,
+  Valider, Rejeter avec motif obligatoire), Mes propositions (statut + motif),
+  Versions (historique du pack).
+- Validation d'une entrée `safety` : case « vérifié avec une source fiable »
+  obligatoire dans l'UI.
+- **Provenance** : table `profiles` (`display_name` public, défaut anonyme
+  « Contributeur XXXX » dérivé de l'id ; jamais l'e-mail). Créée par trigger à
+  l'inscription ; chacun ne peut modifier que son propre nom.
+- **Temps réel** : `contributions` est dans la publication `supabase_realtime` ;
+  `useContributions()` recharge sur chaque événement (RLS appliquée par abonné).
+
 ## Assistant IA
 
 - Contrat neutre : `src/lib/ai/provider.ts` — `LLMProvider` avec `generate()`
