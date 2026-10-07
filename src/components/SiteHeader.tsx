@@ -26,6 +26,9 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/machines/new" className={chipClassName()}>
+            + Machine
+          </Link>
           {user ? (
             <>
               <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline" title={user.email ?? ""}>

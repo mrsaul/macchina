@@ -148,6 +148,11 @@ check("contributor cannot self-approve", d.denied, d.msg);
 d = await denied("reader", `update public.contributions set status='approved' where id=${P}`);
 check("reader cannot approve", d.denied, d.msg);
 
+d = await denied("reader", `update public.contributions set text='edited by reader' where id='10000000-0000-0000-0000-000000000001'`);
+check("reader cannot edit an approved contribution", d.denied, d.msg);
+d = await denied("reader", `delete from public.contributions where id='10000000-0000-0000-0000-000000000001'`);
+check("reader cannot delete a contribution", d.denied, d.msg);
+
 d = await denied("maint", `update public.contributions set status='rejected' where id=${P}`);
 check("rejection without reason is refused", d.denied, d.msg);
 
@@ -204,6 +209,42 @@ d = await denied("contrib", `insert into public.profiles values ('${U.reader}', 
 check("clients cannot create profiles", d.denied, d.msg);
 d = await denied("anon", `update public.profiles set display_name='x'`);
 check("anon cannot rename anyone", d.denied, d.msg);
+
+// --- create_machine() ------------------------------------------------------
+const create = (brand, model, type = "grinder", pack = `'{"version":"0.1.0","id":"spoofed"}'::jsonb`) =>
+  `select public.create_machine('${brand}', '${model}', '${type}', 'Moulin du labo', ${pack}) as id`;
+
+d = await denied("anon", create("Mahlkönig", "EK43 S"));
+check("anon cannot create a machine", d.denied, d.msg);
+
+r = await as("reader", create("Mahlkönig", "EK43 S"));
+const newId = r.rows[0]?.id;
+check("signed-in user creates a machine with a clean slug", newId === "mahlkonig-ek43-s", newId);
+
+r = await as("reader", `select role from public.memberships where machine_id='${newId}'`);
+check("creator becomes maintainer of the new machine", r.rows[0]?.role === "maintainer", JSON.stringify(r.rows));
+
+r = await as("anon", `select type, created_by, pack->>'id' as pack_id, pack->>'type' as pack_type from public.machines where id='${newId}'`);
+check("new machine is publicly readable, typed, pack id forced to the row id",
+  r.rows[0]?.type === "grinder" && r.rows[0]?.pack_id === newId && r.rows[0]?.pack_type === "grinder" && r.rows[0]?.created_by === U.reader,
+  JSON.stringify(r.rows[0]));
+
+r = await as("reader", create("Mahlkönig", "EK43 S"));
+check("same name gets a suffixed id", r.rows[0]?.id === "mahlkonig-ek43-s-2", r.rows[0]?.id);
+
+d = await denied("reader", create("Mahlkönig", "X", "toaster"));
+check("unknown type is refused", d.denied, d.msg);
+d = await denied("reader", `select public.create_machine(null, 'X', 'grinder', null, '{}'::jsonb)`);
+check("missing brand is refused", d.denied, d.msg);
+d = await denied("reader", create("Brand", "Model", "grinder", `'[1,2]'::jsonb`));
+check("non-object pack is refused", d.denied, d.msg);
+
+for (const m of ["A", "B", "C"]) await as("reader", create("Daily", m));
+d = await denied("reader", create("Daily", "D"));
+check("6th machine in a day is refused", d.denied, d.msg);
+
+d = await denied("reader", `insert into public.machines (id, brand, model, pack) values ('direct', 'x', 'y', '{}')`);
+check("direct machine insert is still refused", d.denied, d.msg);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
 process.exit(failures ? 1 : 0);

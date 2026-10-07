@@ -3,9 +3,11 @@ import { z } from "zod";
 import { AIBusyError, AIUnavailableError, getLLMProvider } from "@/lib/ai";
 import { buildClassifyPrompt, ClassificationSchema, finalizeClassification } from "@/lib/ai/classify";
 import { createIntentLineParser } from "@/lib/ai/intent-line";
+import { buildNarrateMessage, buildNarratePrompt, NarrationSchema, type Narration } from "@/lib/ai/narrate";
 import { buildAnswerPrompt } from "@/lib/ai/prompt";
 import { getMachineRole } from "@/lib/auth/machine-role";
 import { getKnowledge } from "@/lib/knowledge-server";
+import { checkLimits, hasValues, ReadingSchema, type LimitAlert, type Reading } from "@/lib/narration";
 import { getPack } from "@/lib/packs";
 import type { KnowledgeSection } from "@/lib/knowledge";
 import type { MachinePack } from "@/lib/packs/schema";
@@ -16,12 +18,17 @@ import type { AnswerStreamEvent, ClassifyResponse } from "./events";
 //   mode "answer"   (any role, anonymous included): streamed answer grounded in the pack.
 //   mode "classify" (contributor / maintainer): info | question | command, plus
 //                   1–4 knowledge entries for "info", as strict JSON.
+//   mode "narrate"  (signed-in users): short live comment on roast readings
+//                   plus a safety level, as strict JSON. Advice only: nothing
+//                   here can reach the machine.
 // The API key stays on the server (ANTHROPIC_API_KEY, read by the provider).
 
 const MAX_TURNS = 20;
 const MAX_CHARS = 4000;
 const WINDOW_MS = 10 * 60 * 1000;
-const LIMITS = { anonymous: 10, authenticated: 60, classify: 30 }; // per 10 minutes
+// Per 10 minutes. Narration fires every ~20 s (30 per 10 min) plus manual requests.
+const LIMITS = { anonymous: 10, authenticated: 60, classify: 30, narrate: 45 };
+const MAX_PREVIOUS_READINGS = 10;
 
 const Turn = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(MAX_CHARS) });
 
@@ -42,6 +49,12 @@ const BodySchema = z.discriminatedUnion("mode", [
     mode: z.literal("classify"),
     machineId: z.string().min(1),
     message: z.string().trim().min(1).max(MAX_CHARS),
+  }),
+  z.object({
+    mode: z.literal("narrate"),
+    machineId: z.string().min(1),
+    reading: ReadingSchema.refine(hasValues, { message: "au moins une mesure" }),
+    previous: z.array(ReadingSchema).max(MAX_PREVIOUS_READINGS).default([]),
   }),
 ]);
 
@@ -72,7 +85,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return jsonError(400, "Requête invalide.");
   const body = parsed.data;
 
-  const pack = getPack(body.machineId);
+  const pack = await getPack(body.machineId);
   if (!pack) return jsonError(404, "Machine inconnue.");
 
   const { userId, role } = await getMachineRole(pack.id);
@@ -85,6 +98,14 @@ export async function POST(request: NextRequest) {
     const limit = rateLimit(`classify:${userId}`, LIMITS.classify, WINDOW_MS);
     if (!limit.ok) return tooMany(limit.retryAfterSeconds);
     return classify(body.message, pack, request.signal);
+  }
+
+  if (body.mode === "narrate") {
+    // Signed-in only: a live session costs ~30 model calls per 10 minutes.
+    if (!userId) return jsonError(401, "Connectez-vous pour utiliser la narration live.");
+    const limit = rateLimit(`narrate:${userId}`, LIMITS.narrate, WINDOW_MS);
+    if (!limit.ok) return tooMany(limit.retryAfterSeconds);
+    return narrate(body.reading, body.previous, pack, request.signal);
   }
 
   // Anonymous reading is allowed (CLAUDE.md): limit per IP for visitors and
@@ -119,6 +140,51 @@ async function classify(message: string, pack: MachinePack, signal: AbortSignal)
     return NextResponse.json(classification satisfies ClassifyResponse, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const { status, message } = providerErrorMessage(error);
+    return jsonError(status, message);
+  }
+}
+
+const LIMIT_BREACH_MESSAGE = "Seuil documenté dépassé : arrête la chauffe et suis les consignes du constructeur.";
+
+/** When the model is unavailable, a limit breach is still reported. */
+function limitOnlyNarration(limitAlerts: LimitAlert[]): Narration {
+  return { comment: "", safety: { level: "danger", message: LIMIT_BREACH_MESSAGE }, limitAlerts };
+}
+
+async function narrate(reading: Reading, previous: Reading[], pack: MachinePack, signal: AbortSignal) {
+  // Hard limits are checked here, deterministically; the model is told about
+  // breaches but cannot downgrade them.
+  const limitAlerts = checkLimits(reading, pack.limits);
+  try {
+    const result = await getLLMProvider().generateJSON({
+      system: buildNarratePrompt(pack, await getKnowledge(pack)),
+      messages: [{ role: "user", content: buildNarrateMessage(reading, previous, limitAlerts) }],
+      schema: NarrationSchema,
+      effort: "low", // latency matters more than depth every 20 seconds
+      signal,
+    });
+    if (!result.ok) {
+      if (limitAlerts.length) {
+        // The safety alert must reach the roaster even if the comment failed.
+        return NextResponse.json(limitOnlyNarration(limitAlerts));
+      }
+      return jsonError(502, "Commentaire indisponible pour ce relevé.");
+    }
+
+    const narration: Narration = { ...result.data, limitAlerts };
+    if (limitAlerts.length && narration.safety.level !== "danger") {
+      narration.safety = {
+        level: "danger",
+        message: narration.safety.message || LIMIT_BREACH_MESSAGE,
+      };
+    }
+    if (narration.safety.level === "none") narration.safety.message = "";
+    return NextResponse.json(narration, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    const { status, message } = providerErrorMessage(error);
+    if (limitAlerts.length) {
+      return NextResponse.json(limitOnlyNarration(limitAlerts));
+    }
     return jsonError(status, message);
   }
 }

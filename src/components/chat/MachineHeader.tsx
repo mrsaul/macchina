@@ -1,6 +1,7 @@
 "use client";
 
-import { Chip, Tag } from "@/components/ui";
+import Link from "next/link";
+import { Chip, chipClassName, Tag } from "@/components/ui";
 import { ROLE_LABELS, type MemberRole } from "@/lib/roles";
 import type { ChatPack } from "./types";
 
@@ -35,6 +36,11 @@ export function MachineHeader({
           <Tag aria-live="polite" className={roleLoading ? "opacity-40" : ""}>
             {ROLE_LABELS[role]}
           </Tag>
+          {pack.type === "roaster" && (
+            <Link href={`/m/${pack.id}/narration`} className={chipClassName()}>
+              ● Live
+            </Link>
+          )}
           <Chip
             onClick={onOpenJournal}
             aria-haspopup="dialog"

@@ -165,6 +165,49 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 - **Temps réel** : `contributions` est dans la publication `supabase_realtime` ;
   `useContributions()` recharge sur chaque événement (RLS appliquée par abonné).
 
+## Machines et ontologie commune
+
+- **Ontologie** (`src/lib/ontology.ts`) : types `roaster | grinder | espresso | other`
+  et identifiants d'intentions **communs** (`securite`, `utilisation`, `reglages`,
+  `entretien`, `depannage`). Tous les packs ont la même forme ; seuls changent selon
+  le type : `controls` (commandes), `outline` (sections prévues), `vocabulary`,
+  mots-clés et suggestions. (Le pack S7X garde ses intentions historiques, dont
+  `torrefaction`.)
+- **Ajouter une machine** : `/machines/new` → `POST /api/machines` (connecté) →
+  le modèle propose la **structure** (`src/lib/ai/generate-pack.ts`, effort medium,
+  ~30 s) → `assembleStarterPack()` retire toute description contenant un chiffre,
+  borne les tailles, force une section `securite`, `limits` vide → RPC
+  `create_machine()` (security definer) insère la machine **et** le membership
+  `maintainer` du créateur, génère l'id (slug + suffixe), force l'id du pack,
+  max 5 machines/jour/compte → redirection `/m/[machineId]`.
+- **Aucune valeur inventée** dans un pack généré : réglages, températures, seuils
+  viennent uniquement des contributions validées.
+- Pages par machine : `/m/[machineId]` (chat) et `/m/[machineId]/narration`
+  (torréfacteurs uniquement). `/` = machine par défaut ; `/narration` redirige.
+- Journal › Base affiche aussi les sections prévues encore vides, les commandes et
+  le vocabulaire.
+
+## Narration live (`/narration`)
+
+- Le torréfacteur saisit ou colle (Roastware) : temps, phase, Bean Surface,
+  Internal, RoR, DTR. Toutes les 20 s, **si les valeurs ont changé**, le relevé
+  et les 10 précédents partent vers `/api/copilot` mode `narrate`.
+- **Conseil uniquement** : l'app ne parle jamais à la machine ; le prompt
+  interdit de prétendre agir.
+- **Exception assumée à « pack uniquement »** : pour interpréter une courbe, le
+  modèle peut utiliser les principes généraux de torréfaction. Commandes propres
+  à la machine et **toute valeur chiffrée** : uniquement depuis le pack.
+- **Sécurité** : réponse `{ comment, safety: { level: none|attention|danger, message } }`.
+  Les seuils durs sont dans `pack.limits` (source obligatoire) et vérifiés **par le
+  serveur** (`checkLimits`) : un dépassement force `danger`, même si le modèle
+  échoue ou dit le contraire. Le modèle n'invente jamais de seuil.
+- Temps = chrono ancré sur la dernière saisie (sinon des relevés successifs
+  partagent le même temps et la tendance est faussée).
+- Réservé aux comptes connectés (≈30 appels / 10 min) ; limite 45 / 10 min ;
+  un 401 ou 429 met la boucle en pause. Effort `low` (latence mesurée : 5–9 s).
+- Parser Roastware (`parsePastedReadings`) : heuristique sur des libellés, à
+  ajuster quand on aura un vrai extrait de Roastware.
+
 ## Assistant IA
 
 - Contrat neutre : `src/lib/ai/provider.ts` — `LLMProvider` avec `generate()`
@@ -183,6 +226,7 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
     sections citées `[§id]`, dit quand l'info manque. 1re ligne `INTENTIONS: …`
     retirée du flux par `intent-line.ts` ; une intention `safety` trouvée par
     mots-clés est toujours conservée.
+  - `mode: "narrate"` (comptes connectés) : voir « Narration live ».
   - `mode: "classify"` (contributor / maintainer de la machine, sinon 401/403) :
     `{ machineId, message }` → `{ kind: "info"|"question"|"command", entries }`,
     1 à 4 entrées `{ text, section, safety }` pour `info`, liste vide sinon
@@ -219,7 +263,11 @@ Pas d'ombres, pas de dégradés, pas d'arrondis.
 
 ## Décisions d'architecture (2026-10-02)
 
-1. **Packs : le dépôt Git est la source de vérité.**
+1. **Packs : deux sources, un schéma** (révisé le 2026-10-08 avec « Ajouter une machine »).
+   - Machines **curées** (S7X) : pack versionné dans Git, prioritaire pour son id.
+   - Machines **créées dans l'app** : pack de départ généré, stocké dans `machines.pack`.
+   - `getPack(id)` (async, `src/lib/packs/index.ts`) : Git d'abord, puis la base.
+   Ancienne règle pour les packs Git :
    - Les packs vivent dans `packs/`, sont chargés par l'app au build et validés
      par `MachinePackSchema` (Zod) au premier chargement.
    - Une proposition de contributeur est stockée en base (table `contributions`) ;

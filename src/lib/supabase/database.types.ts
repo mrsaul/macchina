@@ -93,23 +93,32 @@ export type Database = {
         Row: {
           brand: string
           created_at: string
+          created_by: string | null
+          description: string | null
           id: string
           model: string
           pack: Json
+          type: string
         }
         Insert: {
           brand: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
           id: string
           model: string
           pack: Json
+          type?: string
         }
         Update: {
           brand?: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
           id?: string
           model?: string
           pack?: Json
+          type?: string
         }
         Relationships: []
       }
@@ -162,7 +171,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_machine: {
+        Args: {
+          p_brand: string
+          p_description: string
+          p_model: string
+          p_pack: Json
+          p_type: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       contribution_status: "proposed" | "approved" | "rejected"

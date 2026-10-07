@@ -40,3 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# Raw chat exports used to prepare contributions (personal, never committed)
+import-chat.txt
+imports/

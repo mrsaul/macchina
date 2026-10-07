@@ -2,48 +2,252 @@
   "id": "stronghold-s7x",
   "brand": "Stronghold",
   "model": "S7X",
-  "version": "0.0.2",
+  "type": "roaster",
+  "version": "0.0.3",
   "status": "draft",
   "language": "fr",
-  "description": "Squelette du pack. Aucun contenu technique n'a encore été saisi ni validé.",
+  "description": "Torréfacteur Stronghold S7X (halogène, air chaud, tambour), piloté par Roastware. Le contenu technique vient des contributions validées.",
   "sources": [],
   "sections": [],
+  "controls": [
+    {
+      "id": "hot-air",
+      "label": "Hot air",
+      "description": "Air chaud soufflé dans le tambour.",
+      "unit": "échelle 0–10"
+    },
+    {
+      "id": "halogen",
+      "label": "Halogen",
+      "description": "Chauffe par halogène : sèche le grain au début, chauffe l'intérieur du grain pendant le développement.",
+      "unit": "échelle 0–10"
+    },
+    {
+      "id": "drum-heater",
+      "label": "Drum heater",
+      "description": "Chauffe du tambour ; très puissant.",
+      "unit": "échelle 0–10"
+    },
+    {
+      "id": "bean-agitation",
+      "label": "Bean agitation",
+      "description": "Brassage des grains, qui répartit la chaleur entre eux.",
+      "unit": "échelle 0–10"
+    },
+    {
+      "id": "release",
+      "label": "Release",
+      "description": "Largue le café en fin de torréfaction."
+    }
+  ],
+  "outline": [
+    {
+      "id": "prechauffage",
+      "title": "Préchauffage",
+      "description": "Consigne, durée et signal de fin de préchauffage."
+    },
+    {
+      "id": "chargement",
+      "title": "Chargement",
+      "description": "Trémie et moment de la charge."
+    },
+    {
+      "id": "capacite",
+      "title": "Capacité",
+      "description": "Charge maximale par batch."
+    },
+    {
+      "id": "controle-grain",
+      "title": "Contrôle du grain",
+      "description": "Humidité, taille, densité, fragilité avant réglage."
+    },
+    {
+      "id": "reglages",
+      "title": "Réglages",
+      "description": "Les quatre paramètres de chauffe et leur usage."
+    },
+    {
+      "id": "first-crack",
+      "title": "First crack",
+      "description": "Repères pour le premier crack."
+    },
+    {
+      "id": "torrefaction-claire",
+      "title": "Torréfaction claire",
+      "description": "Conduire un profil filtre."
+    },
+    {
+      "id": "profils",
+      "title": "Profils",
+      "description": "Créer, nommer, retrouver et réutiliser un profil."
+    },
+    {
+      "id": "mode-auto",
+      "title": "Mode automatique",
+      "description": "Rejouer un profil, suivre la courbe, reprendre la main."
+    },
+    {
+      "id": "roastware",
+      "title": "Roastware",
+      "description": "L'écran et ses mesures."
+    },
+    {
+      "id": "entretien",
+      "title": "Entretien",
+      "description": "Nettoyage et maintenance."
+    },
+    {
+      "id": "depannage",
+      "title": "Dépannage",
+      "description": "Erreurs, alarmes et solutions."
+    },
+    {
+      "id": "securite",
+      "title": "Sécurité",
+      "description": "Risques, limites et consignes."
+    },
+    {
+      "id": "exemples",
+      "title": "Exemples de sessions",
+      "description": "Torréfactions réelles, à titre d'illustration."
+    }
+  ],
+  "vocabulary": [
+    {
+      "term": "RoR",
+      "definition": "Rate of rise : vitesse de montée en température du grain."
+    },
+    {
+      "term": "DT / DTR",
+      "definition": "Development time / ratio : durée et part de la phase de développement."
+    },
+    {
+      "term": "First crack",
+      "definition": "Premier craquement des grains, repère du début du développement."
+    },
+    {
+      "term": "Maillard",
+      "definition": "Phase de brunissement entre le séchage et le développement."
+    },
+    {
+      "term": "Bean Surface Temp",
+      "definition": "Température de surface du grain affichée par Roastware."
+    },
+    {
+      "term": "Internal Temp",
+      "definition": "Température interne affichée par Roastware."
+    }
+  ],
   "intents": [
     {
       "id": "securite",
       "label": "Sécurité",
       "safety": true,
-      "keywords": ["feu", "incendie", "flamme", "fumee", "surchauffe", "brule", "danger", "securite", "extincteur", "limite", "temperature max"]
+      "keywords": [
+        "feu",
+        "incendie",
+        "flamme",
+        "fumee",
+        "surchauffe",
+        "brule",
+        "danger",
+        "securite",
+        "extincteur",
+        "limite",
+        "temperature max"
+      ]
     },
     {
       "id": "torrefaction",
       "label": "Torréfaction",
-      "keywords": ["torrefaction", "torrefier", "profil", "courbe", "charge", "developpement", "crack", "degre", "lot", "batch"]
+      "keywords": [
+        "torrefaction",
+        "torrefier",
+        "profil",
+        "courbe",
+        "charge",
+        "developpement",
+        "crack",
+        "degre",
+        "lot",
+        "batch"
+      ]
     },
     {
       "id": "reglages",
       "label": "Réglages",
-      "keywords": ["reglage", "regler", "parametre", "puissance", "ventilateur", "ventilation", "chauffe", "tambour", "vitesse", "consigne"]
+      "keywords": [
+        "reglage",
+        "regler",
+        "parametre",
+        "puissance",
+        "ventilateur",
+        "ventilation",
+        "chauffe",
+        "tambour",
+        "vitesse",
+        "consigne"
+      ]
     },
     {
       "id": "depannage",
       "label": "Dépannage",
-      "keywords": ["erreur", "panne", "probleme", "bloque", "alarme", "code", "ne demarre", "ne marche", "bug"]
+      "keywords": [
+        "erreur",
+        "panne",
+        "probleme",
+        "bloque",
+        "alarme",
+        "code",
+        "ne demarre",
+        "ne marche",
+        "bug"
+      ]
     },
     {
       "id": "entretien",
       "label": "Entretien",
-      "keywords": ["entretien", "nettoyage", "nettoyer", "filtre", "maintenance", "peau", "peaux", "residu"]
+      "keywords": [
+        "entretien",
+        "nettoyage",
+        "nettoyer",
+        "filtre",
+        "maintenance",
+        "peau",
+        "peaux",
+        "residu"
+      ]
     }
   ],
   "suggestions": [
-    { "text": "Comment préparer la machine avant une première torréfaction ?", "intent": "torrefaction" },
-    { "text": "Quels réglages surveiller pendant le développement ?", "intent": "reglages" },
-    { "text": "Que faire en cas de fumée excessive ?", "intent": "securite" },
-    { "text": "Comment entretenir la machine après une session ?", "intent": "entretien" },
-    { "text": "La machine affiche une erreur, par où commencer ?", "intent": "depannage" }
+    {
+      "text": "Comment préparer la machine avant une première torréfaction ?",
+      "intent": "torrefaction"
+    },
+    {
+      "text": "Quels réglages surveiller pendant le développement ?",
+      "intent": "reglages"
+    },
+    {
+      "text": "Que faire en cas de fumée excessive ?",
+      "intent": "securite"
+    },
+    {
+      "text": "Comment entretenir la machine après une session ?",
+      "intent": "entretien"
+    },
+    {
+      "text": "La machine affiche une erreur, par où commencer ?",
+      "intent": "depannage"
+    }
   ],
   "journal": [
+    {
+      "date": "2026-10-08",
+      "version": "0.0.3",
+      "title": "Ontologie commune",
+      "body": "Ajout du type, des commandes, des sections prévues et du vocabulaire (sans valeurs). Le contenu vient des contributions validées."
+    },
     {
       "date": "2026-10-03",
       "version": "0.0.2",

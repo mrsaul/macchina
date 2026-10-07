@@ -113,7 +113,14 @@ export function JournalDialog({
         {contributions.loading && current !== "versions" ? (
           <EmptyState>Chargement…</EmptyState>
         ) : current === "base" ? (
-          <KnowledgeBase knowledge={knowledge} rowsById={rowsById} names={contributions.names} />
+          <KnowledgeBase
+            knowledge={knowledge}
+            rowsById={rowsById}
+            names={contributions.names}
+            outline={pack.outline}
+            controls={pack.controls}
+            vocabulary={pack.vocabulary}
+          />
         ) : current === "review" ? (
           <ReviewQueue
             rows={pendingReview}

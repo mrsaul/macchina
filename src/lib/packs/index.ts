@@ -1,29 +1,49 @@
 import "server-only";
 import strongholdS7x from "../../../packs/stronghold-s7x.json";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
 import { MachinePackSchema, type MachinePack } from "./schema";
 
-// Packs come from Git (packs/*.json), bundled at build time. Register new
-// machines here. They are validated on first load, so a malformed pack fails
-// loudly instead of rendering half a screen.
-const RAW_PACKS: Record<string, unknown> = {
+// Two sources of packs, one schema:
+// - curated packs, versioned in Git (packs/*.json) and bundled at build time —
+//   they win for their ids;
+// - packs of machines created in the app ("Ajouter une machine"), stored in
+//   machines.pack and read per request.
+const GIT_PACKS: Record<string, unknown> = {
   "stronghold-s7x": strongholdS7x,
 };
 
-const cache = new Map<string, MachinePack>();
+const gitCache = new Map<string, MachinePack>();
 
-export function getPack(id: string): MachinePack | null {
-  const cached = cache.get(id);
-  if (cached) return cached;
-
-  const raw = RAW_PACKS[id];
-  if (!raw) return null;
-
+function parsePack(id: string, raw: unknown): MachinePack {
   const result = MachinePackSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Pack "${id}" invalide :\n${result.error.issues.map((i) => `- ${i.path.join(".")}: ${i.message}`).join("\n")}`);
   }
-  if (result.data.id !== id) throw new Error(`Pack "${id}" : l'id du fichier vaut "${result.data.id}"`);
-
-  cache.set(id, result.data);
+  if (result.data.id !== id) throw new Error(`Pack "${id}" : l'id du pack vaut "${result.data.id}"`);
   return result.data;
+}
+
+export function isGitPack(id: string) {
+  return id in GIT_PACKS;
+}
+
+export async function getPack(id: string): Promise<MachinePack | null> {
+  if (isGitPack(id)) {
+    const cached = gitCache.get(id) ?? parsePack(id, GIT_PACKS[id]);
+    gitCache.set(id, cached);
+    return cached;
+  }
+  if (!isSupabaseConfigured) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("machines").select("pack").eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  try {
+    return parsePack(id, data.pack);
+  } catch (e) {
+    // A broken stored pack must not take the page down: treat it as missing.
+    console.error(`[packs] ${(e as Error).message}`);
+    return null;
+  }
 }
